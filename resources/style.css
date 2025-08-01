@@ -1,0 +1,19 @@
+* {
+    font-size: 16px;
+}
+
+window {
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+
+#dock {
+    background-color: 1e1e2e;
+    padding: 8px;
+    border: 2px solid #11111b;
+    border-radius: 8px;
+}
+
+label {
+    color: #cdd6f4;
+}
