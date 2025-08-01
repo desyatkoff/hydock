@@ -3,14 +3,14 @@ use gtk4::{
     Application,
     ApplicationWindow,
     Box as GtkBox,
-    CssProvider,
-    Label
+    CssProvider
 };
 use gtk4_layer_shell::{
     Edge,
     LayerShell
 };
 use std::{
+    collections::HashMap,
     fs,
     process::Command,
     rc::Rc
@@ -24,26 +24,19 @@ use glib::{
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct HyprClient {
-    address: String,
-    workspace: Workspace,
-    class: String,
-    title: String,
-    initial_class: String,
-    initial_title: String,
-    pid: u32,
+    class: String
 }
 
 #[derive(Deserialize, Debug)]
 struct Workspace {
     id: i32,
-    name: String,
+    name: String
 }
 
 fn main() {
     let app = Application::builder()
         .application_id("com.github.desyatkoff.hydock")
         .build();
-
     app.connect_activate(build_ui);
     app.run();
 }
@@ -65,9 +58,7 @@ fn build_ui(app: &Application) {
         .resizable(false)
         .title("Hydock")
         .can_focus(false)
-        .default_height(40)
         .build();
-
     window.init_layer_shell();
     window.set_anchor(Edge::Bottom, true);
     window.set_layer(gtk4_layer_shell::Layer::Top);
@@ -76,18 +67,16 @@ fn build_ui(app: &Application) {
         format!("{}/.config/hydock/style.css", std::env::var("HOME").unwrap())
     ) {
         let provider = CssProvider::new();
-
         provider.load_from_data(&css_data);
 
         gtk4::style_context_add_provider_for_display(
             &gtk4::gdk::Display::default().unwrap(),
             &provider,
-            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION
         );
     }
 
-    let container = Rc::new(GtkBox::new(gtk4::Orientation::Horizontal, 8));
-
+    let container = Rc::new(GtkBox::new(gtk4::Orientation::Horizontal, 0));
     container.set_widget_name("dock");
 
     window.set_child(Some(&*container));
@@ -100,10 +89,43 @@ fn build_ui(app: &Application) {
             container_clone.remove(&child);
         }
 
-        for client in fetch_hypr_clients() {
-            let label = Label::new(Some(&client.initial_class));
+        let mut counts: HashMap<String, usize> = HashMap::new();
 
-            container_clone.append(&label);
+        for client in fetch_hypr_clients() {
+            *counts.entry(client.class.to_lowercase()).or_insert(0) += 1;
+        }
+
+        let mut entries: Vec<_> = counts.into_iter().collect();
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+
+        for (class, count) in entries {
+            let app_icon = gtk4::Image::from_icon_name(&class);
+
+            if app_icon.icon_name().is_none() {
+                app_icon.set_icon_name(Some("application-x-executable"));
+            }
+
+            app_icon.set_pixel_size(32);
+
+            let wrapper = GtkBox::new(gtk4::Orientation::Vertical, 0);
+            wrapper.set_widget_name("app-icon");
+            wrapper.append(&app_icon);
+
+            let app_dots_box = GtkBox::new(gtk4::Orientation::Horizontal, 4);
+            app_dots_box.set_widget_name("app-dots-box");
+            app_dots_box.set_halign(gtk4::Align::Center);
+
+            for _ in 0..count {
+                let app_dot = GtkBox::new(gtk4::Orientation::Vertical, 0);
+                app_dot.set_widget_name("app-dot");
+                app_dot.set_size_request(4, 4);
+
+                app_dots_box.append(&app_dot);
+            }
+
+            wrapper.append(&app_dots_box);
+
+            container_clone.append(&wrapper);
         }
 
         return ControlFlow::Continue;
