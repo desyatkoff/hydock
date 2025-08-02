@@ -39,12 +39,14 @@ struct Config {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct ConfigSettings {
+    chaos_mode: bool,
     pinned_applications: Vec<String>
 }
 
 impl Default for ConfigSettings {
     fn default() -> Self {
         ConfigSettings {
+            chaos_mode: false.into(),
             pinned_applications: Vec::new().into(),
         }
     }
@@ -151,7 +153,10 @@ fn build_ui(app: &Application) {
         }
 
         let mut entries: Vec<_> = counts.into_iter().collect();
-        entries.sort_by(|a, b| a.0.cmp(&b.0));
+
+        if !load_config().chaos_mode {
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
+        }
 
         for (class, count) in entries {
             let app_icon = gtk4::Image::from_icon_name(&class);
