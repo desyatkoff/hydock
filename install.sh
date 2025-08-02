@@ -53,35 +53,29 @@ if [[ ! -d ".git" && ! -f "install.sh" ]]; then
         if ! command -v git &>/dev/null; then
             echo "Could not find Git. Installing \`git\` package..."
 
-            install_package() {
-                local pkg="$1"
+            if command -v pacman &>/dev/null; then
+                sudo pacman -S --noconfirm git
+            elif command -v apt &>/dev/null; then
+                sudo apt update
+                sudo apt install -y git
+            elif command -v dnf &>/dev/null; then
+                sudo dnf install -y git
+            elif command -v zypper &>/dev/null; then
+                sudo zypper install -y git
+            elif command -v xbps-install &>/dev/null; then
+                sudo xbps-install -Sy git
+            elif command -v eopkg &>/dev/null; then
+                sudo eopkg install -y git
+            elif command -v apk &>/dev/null; then
+                sudo apk add git
+            elif command -v nix-env &>/dev/null; then
+                nix-env -iA nixpkgs.git
+            else
+                echo "Could not detect your package manager"
+                echo "Please install \`git\` manually"
 
-                if command -v pacman &>/dev/null; then
-                    sudo pacman -S --noconfirm "$pkg"
-                elif command -v apt &>/dev/null; then
-                    sudo apt update
-                    sudo apt install -y "$pkg"
-                elif command -v dnf &>/dev/null; then
-                    sudo dnf install -y "$pkg"
-                elif command -v zypper &>/dev/null; then
-                    sudo zypper install -y "$pkg"
-                elif command -v xbps-install &>/dev/null; then
-                    sudo xbps-install -Sy "$pkg"
-                elif command -v eopkg &>/dev/null; then
-                    sudo eopkg install -y "$pkg"
-                elif command -v apk &>/dev/null; then
-                    sudo apk add "$pkg"
-                elif command -v nix-env &>/dev/null; then
-                    nix-env -iA nixpkgs."$pkg"
-                else
-                    echo "Could not detect your package manager"
-                    echo "Please install \`$pkg\` manually"
-
-                    exit 1
-                fi
-            }
-
-            install_package "git"
+                exit 1
+            fi
         fi
 
         git clone https://github.com/desyatkoff/hydock.git
