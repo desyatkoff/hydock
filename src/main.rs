@@ -27,12 +27,6 @@ struct HyprClient {
     class: String
 }
 
-#[derive(Deserialize, Debug)]
-struct Workspace {
-    id: i32,
-    name: String
-}
-
 fn main() {
     let app = Application::builder()
         .application_id("com.github.desyatkoff.hydock")
