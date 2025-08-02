@@ -28,7 +28,6 @@ use directories::ProjectDirs;
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct HyprClient {
-    address: String,
     class: String
 }
 
@@ -77,11 +76,11 @@ fn load_config() -> ConfigSettings {
         } else {
             let default_config = ConfigSettings::default();
 
-            std::fs::create_dir_all(config_directory);
+            let _ = std::fs::create_dir_all(config_directory);
 
             match toml::to_string(&Config { config: default_config.clone() }) {
                 Ok(toml_str) => {
-                    std::fs::write(&config_path, toml_str);
+                    let _ = std::fs::write(&config_path, toml_str);
                 },
                 Err(_) => {},
             }
