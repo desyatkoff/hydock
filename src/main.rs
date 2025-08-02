@@ -62,6 +62,7 @@ fn build_ui(app: &Application) {
     window.init_layer_shell();
     window.set_anchor(Edge::Bottom, true);
     window.set_layer(gtk4_layer_shell::Layer::Top);
+    window.set_exclusive_zone(58);
 
     if let Ok(css_data) = fs::read_to_string(
         format!("{}/.config/hydock/style.css", std::env::var("HOME").unwrap())
