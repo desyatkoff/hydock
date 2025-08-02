@@ -1,2 +1,3 @@
 [config]
+chaos_mode = false
 pinned_applications = []
