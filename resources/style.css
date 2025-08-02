@@ -1,19 +1,37 @@
 * {
+    font-family: "Noto Sans";
     font-size: 16px;
+    color: #cdd6f4;
 }
 
 window {
     border-radius: 8px;
     margin-bottom: 8px;
+    min-height: 40px;
 }
 
 #dock {
-    background-color: 1e1e2e;
-    padding: 8px;
+    background-color: #1e1e2e;
+    padding: 4px;
     border: 2px solid #11111b;
     border-radius: 8px;
 }
 
-label {
-    color: #cdd6f4;
+#app-icon {
+    padding: 4px 8px;
+    border-radius: 8px;
+    transition: background-color 0.25s ease;
+}
+
+#app-icon:hover {
+    background-color: #313244;
+}
+
+#app-dots-box {
+    margin-top: 2px;
+}
+
+#app-dot {
+    background-color: #89b4fa;
+    border-radius: 50%;
 }
