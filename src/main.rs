@@ -15,16 +15,39 @@ use std::{
     process::Command,
     rc::Rc
 };
-use serde::Deserialize;
+use serde::{
+    Deserialize,
+    Serialize
+};
 use glib::{
     ControlFlow,
     timeout_add_seconds_local
 };
+use directories::ProjectDirs;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct HyprClient {
+    address: String,
     class: String
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct Config {
+    config: ConfigSettings,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct ConfigSettings {
+    pinned_applications: Vec<String>
+}
+
+impl Default for ConfigSettings {
+    fn default() -> Self {
+        ConfigSettings {
+            pinned_applications: Vec::new().into(),
+        }
+    }
 }
 
 fn main() {
@@ -33,6 +56,39 @@ fn main() {
         .build();
     app.connect_activate(build_ui);
     app.run();
+}
+
+fn load_config() -> ConfigSettings {
+    if let Some(project_dirs) = ProjectDirs::from("", "", "hydock") {
+        let config_directory = project_dirs.config_dir();
+        let config_path = config_directory.join("config.toml");
+
+        if let Ok(contents) = std::fs::read_to_string(&config_path) {
+            match toml::from_str::<Config>(&contents) {
+                Ok(config) => {
+                    return config.config;
+                },
+                Err(_) => {
+                    return ConfigSettings::default();
+                }
+            }
+        } else {
+            let default_config = ConfigSettings::default();
+
+            std::fs::create_dir_all(config_directory);
+
+            match toml::to_string(&Config { config: default_config.clone() }) {
+                Ok(toml_str) => {
+                    std::fs::write(&config_path, toml_str);
+                },
+                Err(_) => {},
+            }
+
+            return default_config;
+        }
+    } else {
+        return ConfigSettings::default();
+    }
 }
 
 fn fetch_hypr_clients() -> Vec<HyprClient> {
@@ -86,6 +142,10 @@ fn build_ui(app: &Application) {
 
         let mut counts: HashMap<String, usize> = HashMap::new();
 
+        for pinned in load_config().pinned_applications {
+            *counts.entry(pinned.to_lowercase()).or_insert(0) += 0;
+        }
+
         for client in fetch_hypr_clients() {
             *counts.entry(client.class.to_lowercase()).or_insert(0) += 1;
         }
@@ -105,6 +165,41 @@ fn build_ui(app: &Application) {
             let wrapper = GtkBox::new(gtk4::Orientation::Vertical, 0);
             wrapper.set_widget_name("app-icon");
             wrapper.append(&app_icon);
+
+            let gesture = gtk4::GestureClick::builder().button(0).build();
+
+            gesture.connect_pressed(move |_, n_press, _, _| {
+                if n_press == 1 {
+                    let address_cmd_str = format!(
+                        "hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'",
+                        class
+                    );
+                    let address_output = Command::new("sh")
+                        .arg("-c")
+                        .arg(address_cmd_str)
+                        .output()
+                        .expect("Failed to execute `hyprctl clients`");
+
+                    let address_str = String::from_utf8_lossy(&address_output.stdout).trim().to_string();
+
+                    let focus_cmd_str = format!("hyprctl dispatch focuswindow address:{}", address_str);
+                    let focus_output = Command::new("sh")
+                        .arg("-c")
+                        .arg(&focus_cmd_str)
+                        .output()
+                        .expect("Failed to execute `hyprctl dispatch focuswindow`");
+
+                    let focus_str = String::from_utf8_lossy(&focus_output.stdout).trim().to_string();
+
+                    if focus_str == "No such window found" {
+                        let _ = Command::new(format!("/usr/bin/{}", class))
+                            .spawn()
+                            .unwrap();
+                    }
+                }
+            });
+
+            wrapper.add_controller(gesture);
 
             let app_dots_box = GtkBox::new(gtk4::Orientation::Horizontal, 4);
             app_dots_box.set_widget_name("app-dots-box");
