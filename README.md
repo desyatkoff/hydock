@@ -11,7 +11,9 @@
 
 ## Description
 
-Hydock is a GTK dock that uses Hyprland IPC for detecting apps, written in Rust
+<p align="center"><img src="assets/preview.png"/></p>
+
+Hydock is a Rust + GTK dock that uses Hyprland IPC
 
 ## Table of Contents
 
