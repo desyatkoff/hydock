@@ -92,6 +92,22 @@ fn load_config() -> ConfigSettings {
     }
 }
 
+fn load_style() {
+    if let Ok(css_data) = fs::read_to_string(format!(
+        "{}/.config/hydock/style.css",
+        std::env::var("HOME").unwrap()
+    )) {
+        let provider = CssProvider::new();
+        provider.load_from_data(&css_data);
+
+        gtk4::style_context_add_provider_for_display(
+            &gtk4::gdk::Display::default().unwrap(),
+            &provider,
+            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION
+        );
+    }
+}
+
 fn fetch_hyprland_clients() -> Vec<HyprlandClient> {
     let output = Command::new("hyprctl")
         .arg("clients")
@@ -118,26 +134,17 @@ fn build_ui(app: &Application) {
     container.set_widget_name("dock");
 
     window.set_child(Some(&*container));
+
+    load_style();
+
     window.show();
 
     let container_clone = Rc::clone(&container);
 
     timeout_add_seconds_local(1, move || {
-            window.set_exclusive_zone(load_config().exclusive_zone);
+        window.set_exclusive_zone(load_config().exclusive_zone);
 
-        if let Ok(css_data) = fs::read_to_string(format!(
-            "{}/.config/hydock/style.css",
-            std::env::var("HOME").unwrap()
-        )) {
-            let provider = CssProvider::new();
-            provider.load_from_data(&css_data);
-
-            gtk4::style_context_add_provider_for_display(
-                &gtk4::gdk::Display::default().unwrap(),
-                &provider,
-                gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION
-            );
-        }
+        load_style();
 
         while let Some(child) = container_clone.first_child() {
             container_clone.remove(&child);
