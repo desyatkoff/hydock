@@ -56,7 +56,6 @@ struct Config {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct ConfigSettings {
     chaos_mode: bool,
-    exclusive_zone: i32,
     pinned_applications: Vec<String>
 }
 
@@ -64,7 +63,6 @@ impl Default for ConfigSettings {
     fn default() -> Self {
         ConfigSettings {
             chaos_mode: false.into(),
-            exclusive_zone: 66.into(),
             pinned_applications: Vec::new().into(),
         }
     }
@@ -129,6 +127,7 @@ fn build_ui(app: &Application) {
     window.init_layer_shell();
     window.set_anchor(Edge::Bottom, true);
     window.set_layer(gtk4_layer_shell::Layer::Top);
+    window.auto_exclusive_zone_enable();
 
     let container = Rc::new(GtkBox::new(gtk4::Orientation::Horizontal, 0));
     container.set_widget_name("dock");
@@ -142,8 +141,6 @@ fn build_ui(app: &Application) {
     let container_clone = Rc::clone(&container);
 
     timeout_add_seconds_local(1, move || {
-        window.set_exclusive_zone(load_config().exclusive_zone);
-
         load_style();
 
         while let Some(child) = container_clone.first_child() {
