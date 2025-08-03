@@ -5,8 +5,12 @@ set -euo pipefail
 
 IFS=$'\n\t'
 
-if command -v doas &>/dev/null; then
-    alias sudo="doas"
+if ! command -v sudo &>/dev/null; then
+    if command -v doas &>/dev/null; then
+        alias sudo="doas"
+    else
+        exit 1
+    fi
 fi
 
 clear
@@ -31,7 +35,8 @@ read -rp "Continue? [Y/n] " confirm
 echo "Checking if Rust is installed..."
 
 if ! command -v rustup &> /dev/null; then
-    echo "Rust is not installed. Installing Rust... (needed to compile Hydock app)"
+    echo "Rust is not installed"
+    echo "Installing Rust..."
 
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
@@ -88,7 +93,7 @@ echo "Done"
 
 echo "Cleaning old project files..."
 
-cargo clean || true
+cargo clean --verbose || true
 
 [ -f "/usr/bin/hydock" ] && sudo rm -vf /usr/bin/hydock || true
 
@@ -96,7 +101,7 @@ echo "Done"
 
 echo "Compiling Hydock..."
 
-cargo build --release
+cargo build --release --verbose
 
 echo "Done"
 
