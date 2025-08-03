@@ -17,16 +17,24 @@
  * along with Hydock. If not, see <https://www.gnu.org/licenses/>
  */
 
-use gtk4::prelude::*;
+use glib::{
+    ControlFlow,
+    timeout_add_seconds_local
+};
 use gtk4::{
     Application,
     ApplicationWindow,
     Box as GtkBox,
-    CssProvider
+    CssProvider,
+    prelude::*
 };
 use gtk4_layer_shell::{
     Edge,
     LayerShell
+};
+use serde::{
+    Deserialize,
+    Serialize
 };
 use std::{
     collections::HashMap,
@@ -34,89 +42,50 @@ use std::{
     process::Command,
     rc::Rc
 };
-use serde::{
-    Deserialize,
-    Serialize
-};
-use glib::{
-    ControlFlow,
-    timeout_add_seconds_local
-};
 
-#[derive(Deserialize, Debug)]
-struct HyprlandClient {
-    class: String
-}
-
+/// Wrapper for the full Hydock configuration
 #[derive(Debug, Deserialize, Serialize)]
 struct Config {
-    config: ConfigSettings,
+    config: ConfigSettings
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+/// Config settings loaded from `config.toml`
+///
+/// * `chaos_mode`: Enables random order of app icons
+/// * `pinned_applications`: List of application class names that should always appear in the dock
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct ConfigSettings {
     chaos_mode: bool,
     pinned_applications: Vec<String>
 }
 
+/// Default config settings implementation
 impl Default for ConfigSettings {
     fn default() -> Self {
         ConfigSettings {
             chaos_mode: false.into(),
-            pinned_applications: Vec::new().into(),
+            pinned_applications: Vec::new().into()
         }
     }
 }
 
+/// Represents a Hyprland client (a window) with its application class name
+#[derive(Debug, Deserialize)]
+struct HyprlandClient {
+    class: String
+}
+
+/// Entry point
 fn main() {
     let app = Application::builder()
         .application_id("com.github.desyatkoff.hydock")
         .build();
-    app.connect_activate(build_ui);
+    app.connect_activate(build_dock);
     app.run();
 }
 
-fn load_config() -> ConfigSettings {
-    if let Ok(toml_data) = fs::read_to_string(format!(
-        "{}/.config/hydock/config.toml",
-        std::env::var("HOME").unwrap()
-    )) {
-        match toml::from_str::<Config>(&toml_data) {
-            Ok(config) => config.config,
-            Err(_) => ConfigSettings::default()
-        }
-    } else {
-        return ConfigSettings::default();
-    }
-}
-
-fn load_style() {
-    if let Ok(css_data) = fs::read_to_string(format!(
-        "{}/.config/hydock/style.css",
-        std::env::var("HOME").unwrap()
-    )) {
-        let provider = CssProvider::new();
-        provider.load_from_data(&css_data);
-
-        gtk4::style_context_add_provider_for_display(
-            &gtk4::gdk::Display::default().unwrap(),
-            &provider,
-            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION
-        );
-    }
-}
-
-fn fetch_hyprland_clients() -> Vec<HyprlandClient> {
-    let output = Command::new("hyprctl")
-        .arg("clients")
-        .arg("-j")
-        .output()
-        .expect("Failed to execute `hyprctl`");
-
-    return serde_json::from_slice::<Vec<HyprlandClient>>(&output.stdout).unwrap_or_default();
-}
-
-fn build_ui(app: &Application) {
+/// Loads dock once and refreshes every second
+fn build_dock(app: &Application) {
     let window = ApplicationWindow::builder()
         .application(app)
         .decorated(false)
@@ -140,6 +109,7 @@ fn build_ui(app: &Application) {
 
     let container_clone = Rc::clone(&container);
 
+    // Main loop for refreshing dock
     timeout_add_seconds_local(1, move || {
         load_style();
 
@@ -149,16 +119,19 @@ fn build_ui(app: &Application) {
 
         let mut counts: HashMap<String, usize> = HashMap::new();
 
+        // Ensure pinned apps appear in dock even if they have no open windows
         for pinned in load_config().pinned_applications {
             *counts.entry(pinned.to_lowercase()).or_insert(0) += 0;
         }
 
+        // Add actually opened apps too
         for client in fetch_hyprland_clients() {
             *counts.entry(client.class.to_lowercase()).or_insert(0) += 1;
         }
 
         let mut entries: Vec<_> = counts.into_iter().collect();
 
+        // Sort app icons in alphabetical order if chaos mode is disabled
         if !load_config().chaos_mode {
             entries.sort_by(|a, b| a.0.cmp(&b.0));
         }
@@ -178,18 +151,22 @@ fn build_ui(app: &Application) {
 
             let gesture = gtk4::GestureClick::builder().button(0).build();
 
+            // Try to focus the first window of the clicked app class using `hyprctl`
+            // If it fails (e.g., no such window), fallback to launching the app binary from `/usr/bin/` directory
             gesture.connect_pressed(move |_, n_press, _, _| {
                 if n_press == 1 {
                     let address_cmd_str = format!(
-                        "hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'",
+                        "hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'",    // Get address of the first client with specified class
                         class
                     );
                     let address_output = Command::new("sh")
                         .arg("-c")
                         .arg(address_cmd_str)
                         .output()
-                        .expect("Failed to execute `hyprctl clients`");
-
+                        .expect(&format!(
+                            "Failed to execute `hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'`",
+                            class
+                        ));
                     let address_str = String::from_utf8_lossy(&address_output.stdout).trim().to_string();
 
                     let focus_cmd_str = format!("hyprctl dispatch focuswindow address:{}", address_str);
@@ -197,8 +174,10 @@ fn build_ui(app: &Application) {
                         .arg("-c")
                         .arg(&focus_cmd_str)
                         .output()
-                        .expect("Failed to execute `hyprctl dispatch focuswindow`");
-
+                        .expect(&format!(
+                            "Failed to execute `hyprctl dispatch focuswindow address:{}`",
+                            address_str
+                        ));
                     let focus_str = String::from_utf8_lossy(&focus_output.stdout).trim().to_string();
 
                     if focus_str == "No such window found" {
@@ -211,6 +190,7 @@ fn build_ui(app: &Application) {
 
             wrapper.add_controller(gesture);
 
+            // Dots are representing count of all windows of the specified app
             let app_dots_box = GtkBox::new(gtk4::Orientation::Horizontal, 4);
             app_dots_box.set_widget_name("app-dots-box");
             app_dots_box.set_halign(gtk4::Align::Center);
@@ -230,4 +210,47 @@ fn build_ui(app: &Application) {
 
         return ControlFlow::Continue;
     });
+}
+
+/// Queries Hyprland for currently open clients using `hyprctl`, deserializes JSON output
+fn fetch_hyprland_clients() -> Vec<HyprlandClient> {
+    let output = Command::new("hyprctl")
+        .arg("clients")
+        .arg("-j")
+        .output()
+        .expect("Failed to execute `hyprctl clients -j`");
+
+    return serde_json::from_slice::<Vec<HyprlandClient>>(&output.stdout).unwrap_or_default();
+}
+
+/// Loads configuration file from `~/.config/hydock/config.toml`, returns default settings if fails
+fn load_config() -> ConfigSettings {
+    if let Ok(toml_data) = fs::read_to_string(format!(
+        "{}/.config/hydock/config.toml",
+        std::env::var("HOME").unwrap()
+    )) {
+        match toml::from_str::<Config>(&toml_data) {
+            Ok(config) => config.config,
+            Err(_) => ConfigSettings::default()
+        }
+    } else {
+        return ConfigSettings::default();
+    }
+}
+
+/// Loads stylesheet file from `~/.config/hydock/style.css`
+fn load_style() {
+    if let Ok(css_data) = fs::read_to_string(format!(
+        "{}/.config/hydock/style.css",
+        std::env::var("HOME").unwrap()
+    )) {
+        let provider = CssProvider::new();
+        provider.load_from_data(&css_data);
+
+        gtk4::style_context_add_provider_for_display(
+            &gtk4::gdk::Display::default().unwrap(),
+            &provider,
+            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION
+        );
+    }
 }
