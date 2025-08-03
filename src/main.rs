@@ -1,3 +1,22 @@
+/*
+ * This file is part of Hydock
+ *
+ * Copyright (C) 2025 Sergey Desyatkov
+ *
+ * Hydock is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published
+ * by the Free Software Foundation, either version 3 of the License,
+ * or (at your option) any later version
+ *
+ * Hydock is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Hydock. If not, see <https://www.gnu.org/licenses/>
+ */
+
 use gtk4::prelude::*;
 use gtk4::{
     Application,
@@ -23,11 +42,9 @@ use glib::{
     ControlFlow,
     timeout_add_seconds_local
 };
-use directories::ProjectDirs;
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct HyprClient {
+struct HyprlandClient {
     class: String
 }
 
@@ -39,6 +56,7 @@ struct Config {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct ConfigSettings {
     chaos_mode: bool,
+    exclusive_zone: i32,
     pinned_applications: Vec<String>
 }
 
@@ -46,6 +64,7 @@ impl Default for ConfigSettings {
     fn default() -> Self {
         ConfigSettings {
             chaos_mode: false.into(),
+            exclusive_zone: 66.into(),
             pinned_applications: Vec::new().into(),
         }
     }
@@ -60,46 +79,27 @@ fn main() {
 }
 
 fn load_config() -> ConfigSettings {
-    if let Some(project_dirs) = ProjectDirs::from("", "", "hydock") {
-        let config_directory = project_dirs.config_dir();
-        let config_path = config_directory.join("config.toml");
-
-        if let Ok(contents) = std::fs::read_to_string(&config_path) {
-            match toml::from_str::<Config>(&contents) {
-                Ok(config) => {
-                    return config.config;
-                },
-                Err(_) => {
-                    return ConfigSettings::default();
-                }
-            }
-        } else {
-            let default_config = ConfigSettings::default();
-
-            let _ = std::fs::create_dir_all(config_directory);
-
-            match toml::to_string(&Config { config: default_config.clone() }) {
-                Ok(toml_str) => {
-                    let _ = std::fs::write(&config_path, toml_str);
-                },
-                Err(_) => {},
-            }
-
-            return default_config;
+    if let Ok(toml_data) = fs::read_to_string(format!(
+        "{}/.config/hydock/config.toml",
+        std::env::var("HOME").unwrap()
+    )) {
+        match toml::from_str::<Config>(&toml_data) {
+            Ok(config) => config.config,
+            Err(_) => ConfigSettings::default()
         }
     } else {
         return ConfigSettings::default();
     }
 }
 
-fn fetch_hypr_clients() -> Vec<HyprClient> {
+fn fetch_hyprland_clients() -> Vec<HyprlandClient> {
     let output = Command::new("hyprctl")
         .arg("clients")
         .arg("-j")
         .output()
         .expect("Failed to execute `hyprctl`");
 
-    return serde_json::from_slice::<Vec<HyprClient>>(&output.stdout).unwrap_or_default();
+    return serde_json::from_slice::<Vec<HyprlandClient>>(&output.stdout).unwrap_or_default();
 }
 
 fn build_ui(app: &Application) {
@@ -113,20 +113,6 @@ fn build_ui(app: &Application) {
     window.init_layer_shell();
     window.set_anchor(Edge::Bottom, true);
     window.set_layer(gtk4_layer_shell::Layer::Top);
-    window.set_exclusive_zone(58);
-
-    if let Ok(css_data) = fs::read_to_string(
-        format!("{}/.config/hydock/style.css", std::env::var("HOME").unwrap())
-    ) {
-        let provider = CssProvider::new();
-        provider.load_from_data(&css_data);
-
-        gtk4::style_context_add_provider_for_display(
-            &gtk4::gdk::Display::default().unwrap(),
-            &provider,
-            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION
-        );
-    }
 
     let container = Rc::new(GtkBox::new(gtk4::Orientation::Horizontal, 0));
     container.set_widget_name("dock");
@@ -137,6 +123,22 @@ fn build_ui(app: &Application) {
     let container_clone = Rc::clone(&container);
 
     timeout_add_seconds_local(1, move || {
+            window.set_exclusive_zone(load_config().exclusive_zone);
+
+        if let Ok(css_data) = fs::read_to_string(format!(
+            "{}/.config/hydock/style.css",
+            std::env::var("HOME").unwrap()
+        )) {
+            let provider = CssProvider::new();
+            provider.load_from_data(&css_data);
+
+            gtk4::style_context_add_provider_for_display(
+                &gtk4::gdk::Display::default().unwrap(),
+                &provider,
+                gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION
+            );
+        }
+
         while let Some(child) = container_clone.first_child() {
             container_clone.remove(&child);
         }
@@ -147,7 +149,7 @@ fn build_ui(app: &Application) {
             *counts.entry(pinned.to_lowercase()).or_insert(0) += 0;
         }
 
-        for client in fetch_hypr_clients() {
+        for client in fetch_hyprland_clients() {
             *counts.entry(client.class.to_lowercase()).or_insert(0) += 1;
         }
 
