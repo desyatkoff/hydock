@@ -84,15 +84,21 @@ if [[ ! -d ".git" && ! -f "install.sh" ]]; then
     cd hydock/
 fi
 
+echo "Done"
+
 echo "Cleaning old project files..."
 
 cargo clean || true
 
 [ -f "/usr/bin/hydock" ] && sudo rm -vf /usr/bin/hydock || true
 
+echo "Done"
+
 echo "Compiling Hydock..."
 
 cargo build --release
+
+echo "Done"
 
 echo "Copying binary file to \`/usr/bin/\`..."
 
@@ -115,6 +121,8 @@ if [[ ! -d "$HOME/.config/hydock/" ]]; then
         ./assets/style.css \
         ~/.config/hydock/style.css
 fi
+
+echo "Done"
 
 echo "Successfully installed Hydock"
 echo "Enjoy your new *blazingly fast* dock for Hyprland"
