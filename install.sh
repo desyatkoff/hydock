@@ -88,7 +88,7 @@ echo "Cleaning old project files..."
 
 cargo clean || true
 
-[ -f /usr/bin/hydock ] && sudo rm -vf /usr/bin/hydock || true
+[ -f "/usr/bin/hydock" ] && sudo rm -vf /usr/bin/hydock || true
 
 echo "Compiling Hydock..."
 
@@ -99,6 +99,22 @@ echo "Copying binary file to \`/usr/bin/\`..."
 sudo cp -v \
     ./target/release/hydock \
     /usr/bin/hydock
+
+if [[ ! -d "$HOME/.config/hydock/" ]]; then
+    mkdir -v ~/.config/hydock/
+
+    echo "Copying default \`config.toml\`..."
+
+    cp -v \
+        ./assets/config.toml \
+        ~/.config/hydock/config.toml
+
+    echo "Copying default \`style.css\`..."
+
+    cp -v \
+        ./assets/style.css \
+        ~/.config/hydock/style.css
+fi
 
 echo "Successfully installed Hydock"
 echo "Enjoy your new *blazingly fast* dock for Hyprland"
