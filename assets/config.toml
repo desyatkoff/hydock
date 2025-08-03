@@ -1,3 +1,4 @@
 [config]
 chaos_mode = false
+exclusive_zone = 66
 pinned_applications = []
