@@ -57,9 +57,6 @@ Example `~/.config/hydock/config.toml`:
 # You don't actually want this, idk why did I add this
 chaos_mode = false
 
-# in pixels
-exclusive_zone = 66
-
 # Apps that should be showed always
 pinned_applications = [
     "firefox",
