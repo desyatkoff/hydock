@@ -1,3 +1,4 @@
 [config]
+auto_hide = false
 chaos_mode = false
 pinned_applications = []
