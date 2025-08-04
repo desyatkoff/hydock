@@ -31,8 +31,20 @@ Hydock is a Rust + GTK dock that uses Hyprland IPC
 ## Features
 
 * Configuration support (`~/.config/hydock/config.toml`)
+    + Auto-hide
+    + Chaos mode
+    + Pinned applications
 * Style support (`~/.config/hydock/style.css`)
-* Reloads config, style and apps every second without reopening
+    + Global window style
+    + Dock style
+    + Application icon style
+    + Application dots box style
+    + Application dot style
+* Refreshes every second
+    + Configuration settings reload
+    + Style properties reload
+    + Open applications update
+    + Application window dots update (based on windows count)
 
 ## Installation
 
@@ -54,14 +66,22 @@ Example `~/.config/hydock/config.toml`:
 ```TOML
 [config]
 
+# Hide dock when unfocused
+auto_hide = true
+
+# Enables random order of app icons
 # You don't actually want this, idk why did I add this
 chaos_mode = false
 
-# Apps that should be showed always
+# List of application class names that should always appear in the dock
 pinned_applications = [
+    "discord",
     "firefox",
-    "helix",
     "kitty",
+    "krita",
+    "obsidian",
+    "steam",
+    "telegram",
     "thunar"
 ]
 ```
@@ -71,14 +91,11 @@ pinned_applications = [
 Example `~/.config/hydock/style.css`:
 
 ```CSS
-* {
+hydock {
+    border-radius: 8px;
     color: #cdd6f4;
     font-family: "Noto Sans";
     font-size: 16px;
-}
-
-window {
-    border-radius: 8px;
     margin-bottom: 8px;
     min-height: 58px;
 }
