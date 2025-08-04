@@ -26,6 +26,7 @@ use gtk4::{
     ApplicationWindow,
     Box as GtkBox,
     CssProvider,
+    EventControllerMotion,
     prelude::*
 };
 use gtk4_layer_shell::{
@@ -86,11 +87,13 @@ fn main() {
 
 /// Loads dock once and refreshes every second
 fn build_dock(app: &Application) {
+    // Base Hydock GTK window
     let window = ApplicationWindow::builder()
         .application(app)
         .decorated(false)
         .resizable(false)
         .title("Hydock")
+        .css_name("hydock")
         .can_focus(false)
         .build();
     window.init_layer_shell();
@@ -98,23 +101,50 @@ fn build_dock(app: &Application) {
     window.set_layer(gtk4_layer_shell::Layer::Top);
     window.auto_exclusive_zone_enable();
 
-    let container = Rc::new(GtkBox::new(gtk4::Orientation::Horizontal, 0));
-    container.set_widget_name("dock");
+    // "Show dock" trigger that appears when dock is hidden
+    let trigger = ApplicationWindow::builder()
+        .application(app)
+        .decorated(false)
+        .resizable(false)
+        .title("Hydock Trigger")
+        .can_focus(false)
+        .default_width(2147483647)
+        .default_height(1)
+        .build();
+    trigger.init_layer_shell();
+    trigger.set_anchor(Edge::Bottom, true);
+    trigger.set_layer(gtk4_layer_shell::Layer::Top);
+    trigger.show();
 
-    window.set_child(Some(&*container));
-
-    load_style();
-
-    window.show();
-
-    let container_clone = Rc::clone(&container);
+    // Dock panel itself
+    let dock = Rc::new(GtkBox::new(
+        gtk4::Orientation::Horizontal,
+        0
+    ));
+    let dock_clone = Rc::clone(&dock);
+    dock.set_widget_name("dock");
+    window.set_child(Some(&*dock));
 
     // Main loop for refreshing dock
     timeout_add_seconds_local(1, move || {
+        let window_clone = window.clone();
+        let trigger_motion = EventControllerMotion::new();
+        trigger_motion.connect_enter(move |_, _, _| {
+            window_clone.show();
+        });
+        trigger.add_controller(trigger_motion);
+
+        let window_clone = window.clone();
+        let window_motion = EventControllerMotion::new();
+        window_motion.connect_leave(move |_| {
+            window_clone.hide();
+        });
+        window.add_controller(window_motion);
+
         load_style();
 
-        while let Some(child) = container_clone.first_child() {
-            container_clone.remove(&child);
+        while let Some(child) = dock_clone.first_child() {
+            dock_clone.remove(&child);
         }
 
         let mut counts: HashMap<String, usize> = HashMap::new();
@@ -205,7 +235,7 @@ fn build_dock(app: &Application) {
 
             wrapper.append(&app_dots_box);
 
-            container_clone.append(&wrapper);
+            dock_clone.append(&wrapper);
         }
 
         return ControlFlow::Continue;
