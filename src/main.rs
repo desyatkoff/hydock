@@ -52,10 +52,12 @@ struct Config {
 
 /// Config settings loaded from `config.toml`
 ///
+/// * `auto_hide`: Hide dock when unfocused
 /// * `chaos_mode`: Enables random order of app icons
 /// * `pinned_applications`: List of application class names that should always appear in the dock
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct ConfigSettings {
+    auto_hide: bool,
     chaos_mode: bool,
     pinned_applications: Vec<String>
 }
@@ -64,6 +66,7 @@ struct ConfigSettings {
 impl Default for ConfigSettings {
     fn default() -> Self {
         ConfigSettings {
+            auto_hide: false.into(),
             chaos_mode: false.into(),
             pinned_applications: Vec::new().into()
         }
@@ -88,7 +91,7 @@ fn main() {
 /// Loads dock once and refreshes every second
 fn build_dock(app: &Application) {
     // Base Hydock GTK window
-    let window = ApplicationWindow::builder()
+    let hydock = ApplicationWindow::builder()
         .application(app)
         .decorated(false)
         .resizable(false)
@@ -96,12 +99,12 @@ fn build_dock(app: &Application) {
         .css_name("hydock")
         .can_focus(false)
         .build();
-    window.init_layer_shell();
-    window.set_anchor(Edge::Bottom, true);
-    window.set_layer(gtk4_layer_shell::Layer::Top);
-    window.auto_exclusive_zone_enable();
+    hydock.init_layer_shell();
+    hydock.set_anchor(Edge::Bottom, true);
+    hydock.set_layer(gtk4_layer_shell::Layer::Top);
+    hydock.auto_exclusive_zone_enable();
 
-    // "Show dock" trigger that appears when dock is hidden
+    // Trigger for showing dock again after it became hidden (when `auto_hide = true`)
     let trigger = ApplicationWindow::builder()
         .application(app)
         .decorated(false)
@@ -123,23 +126,28 @@ fn build_dock(app: &Application) {
     ));
     let dock_clone = Rc::clone(&dock);
     dock.set_widget_name("dock");
-    window.set_child(Some(&*dock));
+    hydock.set_child(Some(&*dock));
 
     // Main loop for refreshing dock
     timeout_add_seconds_local(1, move || {
-        let window_clone = window.clone();
-        let trigger_motion = EventControllerMotion::new();
-        trigger_motion.connect_enter(move |_, _, _| {
-            window_clone.show();
-        });
-        trigger.add_controller(trigger_motion);
+        if load_config().auto_hide == true {
+            let hydock_clone = hydock.clone();
+            let trigger_motion = EventControllerMotion::new();
+            trigger_motion.connect_enter(move |_, _, _| {
+                hydock_clone.show();
+            });
+            trigger.add_controller(trigger_motion);
 
-        let window_clone = window.clone();
-        let window_motion = EventControllerMotion::new();
-        window_motion.connect_leave(move |_| {
-            window_clone.hide();
-        });
-        window.add_controller(window_motion);
+            let hydock_clone = hydock.clone();
+            let hydock_motion = EventControllerMotion::new();
+            hydock_motion.connect_leave(move |_| {
+                hydock_clone.hide();
+            });
+            hydock.add_controller(hydock_motion);
+        } else {
+            hydock.clone().show();
+            trigger.clone().hide();
+        }
 
         load_style();
 
