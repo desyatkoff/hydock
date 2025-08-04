@@ -69,7 +69,7 @@ Example `~/.config/hydock/config.toml`:
 # Hide dock when unfocused
 auto_hide = true
 
-# Enables random order of app icons
+# Enable random order of app icons
 # You don't actually want this, idk why did I add this
 chaos_mode = false
 
