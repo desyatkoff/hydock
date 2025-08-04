@@ -53,7 +53,7 @@ struct Config {
 /// Config settings loaded from `config.toml`
 ///
 /// * `auto_hide`: Hide dock when unfocused
-/// * `chaos_mode`: Enables random order of app icons
+/// * `chaos_mode`: Enable random order of app icons
 /// * `pinned_applications`: List of application class names that should always appear in the dock
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct ConfigSettings {
@@ -88,7 +88,7 @@ fn main() {
     app.run();
 }
 
-/// Loads dock once and refreshes every second
+/// Load dock once and refresh it every second
 fn build_dock(app: &Application) {
     // Base Hydock GTK window
     let hydock = ApplicationWindow::builder()
@@ -250,7 +250,7 @@ fn build_dock(app: &Application) {
     });
 }
 
-/// Queries Hyprland for currently open clients using `hyprctl`, deserializes JSON output
+/// Query Hyprland for currently open clients using `hyprctl`, deserialize JSON output
 fn fetch_hyprland_clients() -> Vec<HyprlandClient> {
     let output = Command::new("hyprctl")
         .arg("clients")
@@ -261,7 +261,7 @@ fn fetch_hyprland_clients() -> Vec<HyprlandClient> {
     return serde_json::from_slice::<Vec<HyprlandClient>>(&output.stdout).unwrap_or_default();
 }
 
-/// Loads configuration file from `~/.config/hydock/config.toml`, returns default settings if fails
+/// Load configuration file from `~/.config/hydock/config.toml`, return default settings if fails
 fn load_config() -> ConfigSettings {
     if let Ok(toml_data) = fs::read_to_string(format!(
         "{}/.config/hydock/config.toml",
@@ -276,7 +276,7 @@ fn load_config() -> ConfigSettings {
     }
 }
 
-/// Loads stylesheet file from `~/.config/hydock/style.css`
+/// Load stylesheet file from `~/.config/hydock/style.css`
 fn load_style() {
     if let Ok(css_data) = fs::read_to_string(format!(
         "{}/.config/hydock/style.css",
