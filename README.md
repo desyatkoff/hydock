@@ -26,7 +26,8 @@ Hydock is a Rust + GTK dock that uses Hyprland IPC
 7. [Styling](#styling)
 8. [Usage](#usage)
 9. [Feedback](#feedback)
-10. [License](#license)
+10. [Contributing](#contributing)
+11. [License](#license)
 
 ## Features
 
@@ -142,9 +143,14 @@ Currently, functionality is very minimal, so...
     hydock
     ```
 
-## Feedback  
+## Feedback
 
 Found a bug? [Open an issue](https://github.com/desyatkoff/hydock/issues/new)
+Want to request a feature? [Start a discussion](https://desyatkoff/hydock/discussions/new)
+
+## Contributing
+
+Refer to [CONTRIBUTING.md](/docs/CONTRIBUTING.md)
 
 ## License
 
