@@ -146,7 +146,7 @@ Currently, functionality is very minimal, so...
 ## Feedback
 
 Found a bug? [Open an issue](https://github.com/desyatkoff/hydock/issues/new)
-Want to request a feature? [Start a discussion](https://desyatkoff/hydock/discussions/new)
+Want to request a feature? [Start a discussion](https://github.com/desyatkoff/hydock/discussions/new?category=ideas)
 
 ## Contributing
 
