@@ -77,4 +77,4 @@ We'll review as soon as possible!
 
 ## License
 
-By contributing, you agree that your code will be licensed under the [GPL-3.0-or-later](LICENSE)
+By contributing, you agree that your code will be licensed under the [GPL-3.0-or-later](/LICENSE)
