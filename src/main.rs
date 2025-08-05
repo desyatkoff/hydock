@@ -54,11 +54,13 @@ struct Config {
 ///
 /// * `auto_hide`: Hide dock when unfocused
 /// * `chaos_mode`: Enable random order of app icons
+/// * `ignore_applications`: List of application class names that should never appear in the dock
 /// * `pinned_applications`: List of application class names that should always appear in the dock
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct ConfigSettings {
     auto_hide: bool,
     chaos_mode: bool,
+    ignore_applications: Vec<String>,
     pinned_applications: Vec<String>
 }
 
@@ -68,6 +70,7 @@ impl Default for ConfigSettings {
         ConfigSettings {
             auto_hide: false.into(),
             chaos_mode: false.into(),
+            ignore_applications: Vec::new().into(),
             pinned_applications: Vec::new().into()
         }
     }
@@ -157,14 +160,19 @@ fn build_dock(app: &Application) {
 
         let mut counts: HashMap<String, usize> = HashMap::new();
 
+        // Add actually opened apps
+        for client in fetch_hyprland_clients() {
+            *counts.entry(client.class.to_lowercase()).or_insert(0) += 1;
+        }
+
         // Ensure pinned apps appear in dock even if they have no open windows
         for pinned in load_config().pinned_applications {
             *counts.entry(pinned.to_lowercase()).or_insert(0) += 0;
         }
 
-        // Add actually opened apps too
-        for client in fetch_hyprland_clients() {
-            *counts.entry(client.class.to_lowercase()).or_insert(0) += 1;
+        // Remove unwanted apps
+        for ignored in load_config().ignore_applications {
+            counts.remove_entry(&ignored.to_lowercase());
         }
 
         let mut entries: Vec<_> = counts.into_iter().collect();
