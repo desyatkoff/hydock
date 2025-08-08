@@ -32,6 +32,7 @@ Hydock is a Rust + GTK dock that uses Hyprland IPC
 ## Features
 
 * Configuration support (`~/.config/hydock/config.toml`)
+    + App launcher command
     + Auto-hide
     + Chaos mode
     + Ignore applications
@@ -40,6 +41,7 @@ Hydock is a Rust + GTK dock that uses Hyprland IPC
     + Global window style
     + Dock style
     + Application icon style
+    + Application launcher style
     + Application dots box style
     + Application dot style
 * Refreshes every second
@@ -68,6 +70,9 @@ Example `~/.config/hydock/config.toml`:
 ```TOML
 [config]
 
+# Shell command to execute when the app launcher is clicked
+app_launcher_command = "rofi -show drun"
+
 # Hide dock when unfocused
 auto_hide = true
 
@@ -77,7 +82,7 @@ chaos_mode = false
 
 # List of application class names that should never appear in the dock
 ignore_applications = [
-    "wofi"
+    "rofi"
 ]
 
 # List of application class names that should always appear in the dock
@@ -114,13 +119,13 @@ hydock {
     padding: 4px;
 }
 
-#app-icon {
+#app-icon, #app-launcher {
     border-radius: 8px;
     padding: 4px 8px;
     transition: background-color 0.25s ease;
 }
 
-#app-icon:hover {
+#app-icon:hover, #app-launcher:hover {
     background-color: #313244;
 }
 
