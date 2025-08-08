@@ -19,13 +19,13 @@ hydock {
     padding: 4px;
 }
 
-#app-icon {
+#app-icon, #app-launcher {
     border-radius: 8px;
     padding: 4px 8px;
     transition: background-color 0.25s ease;
 }
 
-#app-icon:hover {
+#app-icon:hover, #app-launcher:hover {
     background-color: #313244;
 }
 

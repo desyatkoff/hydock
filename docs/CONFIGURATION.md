@@ -5,6 +5,9 @@ Example `~/.config/hydock/config.toml`:
 ```TOML
 [config]
 
+# Shell command to execute when the app launcher is clicked
+app_launcher_command = "rofi -show drun"
+
 # Hide dock when unfocused
 auto_hide = true
 
@@ -14,7 +17,7 @@ chaos_mode = false
 
 # List of application class names that should never appear in the dock
 ignore_applications = [
-    "wofi"
+    "rofi"
 ]
 
 # List of application class names that should always appear in the dock
