@@ -175,6 +175,7 @@ fn build_dock(app: &Application) {
             counts.remove_entry(&ignored.to_lowercase());
         }
 
+        // Collect app HashMaps into a Vector
         let mut entries: Vec<_> = counts.into_iter().collect();
 
         // Sort app icons in alphabetical order if chaos mode is disabled
@@ -182,24 +183,23 @@ fn build_dock(app: &Application) {
             entries.sort_by(|a, b| a.0.cmp(&b.0));
         }
 
+        // Add app icons & dots
         for (class, count) in entries {
             let app_icon = gtk4::Image::from_icon_name(&class);
-
-            if app_icon.icon_name().is_none() {
-                app_icon.set_icon_name(Some("application-x-executable"));
-            }
-
             app_icon.set_pixel_size(32);
 
-            let wrapper = GtkBox::new(gtk4::Orientation::Vertical, 0);
-            wrapper.set_widget_name("app-icon");
-            wrapper.append(&app_icon);
+            if app_icon.icon_name().is_none() {
+                app_icon.set_icon_name(Some("application-default-icon"));
+            }
 
-            let gesture = gtk4::GestureClick::builder().button(0).build();
+            let apps_wrapper = GtkBox::new(gtk4::Orientation::Vertical, 0);
+            apps_wrapper.set_widget_name("app-icon");
+            apps_wrapper.append(&app_icon);
 
             // Try to focus the first window of the clicked app class using `hyprctl`
             // If it fails (e.g., no such window), fallback to launching the app binary from `/usr/bin/` directory
-            gesture.connect_pressed(move |_, n_press, _, _| {
+            let apps_gesture = gtk4::GestureClick::builder().button(0).build();
+            apps_gesture.connect_pressed(move |_, n_press, _, _| {
                 if n_press == 1 {
                     let address_cmd_str = format!(
                         "hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'",    // Get address of the first client with specified class
@@ -233,10 +233,8 @@ fn build_dock(app: &Application) {
                     }
                 }
             });
+            apps_wrapper.add_controller(apps_gesture);
 
-            wrapper.add_controller(gesture);
-
-            // Dots are representing count of all windows of the specified app
             let app_dots_box = GtkBox::new(gtk4::Orientation::Horizontal, 4);
             app_dots_box.set_widget_name("app-dots-box");
             app_dots_box.set_halign(gtk4::Align::Center);
@@ -249,10 +247,29 @@ fn build_dock(app: &Application) {
                 app_dots_box.append(&app_dot);
             }
 
-            wrapper.append(&app_dots_box);
-
-            dock_clone.append(&wrapper);
+            apps_wrapper.append(&app_dots_box);
+            dock_clone.append(&apps_wrapper);
         }
+
+        let launcher_icon = gtk4::Image::from_icon_name("applications-all-symbolic");
+        launcher_icon.set_pixel_size(32);
+
+        let launcher_wrapper = GtkBox::new(gtk4::Orientation::Vertical, 0);
+        launcher_wrapper.set_widget_name("app-launcher");
+        launcher_wrapper.append(&launcher_icon);
+
+        let launcher_gesture = gtk4::GestureClick::builder().button(0).build();
+        launcher_gesture.connect_pressed(move |_, n_press, _, _| {
+            if n_press == 1 {
+                // Default to `rofi -show drun`, change if needed
+                let _ = Command::new("rofi")
+                    .arg("-show")
+                    .arg("drun")
+                    .spawn();
+            }
+        });
+        launcher_wrapper.add_controller(launcher_gesture);
+        dock_clone.append(&launcher_wrapper);
 
         return ControlFlow::Continue;
     });
