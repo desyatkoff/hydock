@@ -52,12 +52,14 @@ struct Config {
 
 /// Config settings loaded from `config.toml`
 ///
+/// * `app_launcher_command`: Shell command to execute when the app launcher is clicked
 /// * `auto_hide`: Hide dock when unfocused
 /// * `chaos_mode`: Enable random order of app icons
 /// * `ignore_applications`: List of application class names that should never appear in the dock
 /// * `pinned_applications`: List of application class names that should always appear in the dock
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct ConfigSettings {
+    app_launcher_command: String,
     auto_hide: bool,
     chaos_mode: bool,
     ignore_applications: Vec<String>,
@@ -68,6 +70,7 @@ struct ConfigSettings {
 impl Default for ConfigSettings {
     fn default() -> Self {
         ConfigSettings {
+            app_launcher_command: "rofi -show drun".into(),
             auto_hide: false.into(),
             chaos_mode: false.into(),
             ignore_applications: Vec::new().into(),
@@ -261,10 +264,9 @@ fn build_dock(app: &Application) {
         let launcher_gesture = gtk4::GestureClick::builder().button(0).build();
         launcher_gesture.connect_pressed(move |_, n_press, _, _| {
             if n_press == 1 {
-                // Default to `rofi -show drun`, change if needed
-                let _ = Command::new("rofi")
-                    .arg("-show")
-                    .arg("drun")
+                let _ = Command::new("sh")
+                    .arg("-c")
+                    .arg(load_config().app_launcher_command)
                     .spawn();
             }
         });
