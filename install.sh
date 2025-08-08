@@ -14,11 +14,9 @@ if ! command -v sudo &>/dev/null; then
 fi
 
 if ! command -v rustup &> /dev/null; then
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
     export PATH="$PATH:$HOME/.cargo/bin"
-
-    source "$HOME/.cargo/env"
 fi
 
 if [[ ! -d ".git" && ! -f "install.sh" ]]; then
