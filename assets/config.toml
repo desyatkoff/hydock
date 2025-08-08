@@ -1,4 +1,5 @@
 [config]
+app_launcher_command = "rofi -show drun"
 auto_hide = false
 chaos_mode = false
 ignore_applications = []
