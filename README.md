@@ -44,6 +44,7 @@ Hydock is a Rust + GTK dock that uses Hyprland IPC
     + Application launcher style
     + Application dots box style
     + Application dot style
+    + Separator style
 * Refreshes every second
     + Configuration settings reload
     + Style properties reload
@@ -136,6 +137,13 @@ hydock {
 #app-dot {
     background-color: #89b4fa;
     border-radius: 50%;
+}
+
+#separator {
+    background-color: #313244;
+    border: 1px solid #313244;
+    border-radius: 33%;
+    margin: 4px;
 }
 ```
 
