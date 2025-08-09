@@ -9,9 +9,9 @@
        |___/                       
 ```
 
-## Description
+<https://github.com/user-attachments/assets/de0d51aa-4f44-44c6-8d69-a972482ac78c>
 
-<p align="center"><img src="assets/preview.png"/></p>
+## Description
 
 Hydock is a Rust + GTK dock that uses Hyprland IPC
 
