@@ -137,23 +137,29 @@ fn build_dock(app: &Application) {
 
     // Main loop for refreshing dock
     timeout_add_seconds_local(1, move || {
-        if load_config().auto_hide == true {
-            let hydock_clone = hydock.clone();
-            let trigger_motion = EventControllerMotion::new();
-            trigger_motion.connect_enter(move |_, _, _| {
-                hydock_clone.show();
-            });
-            trigger.add_controller(trigger_motion);
+        let hydock_clone = hydock.clone();
+        let hydock_motion = EventControllerMotion::new();
+        hydock_motion.connect_leave(move |_| {
+            hydock_clone.hide();
+        });
 
-            let hydock_clone = hydock.clone();
-            let hydock_motion = EventControllerMotion::new();
-            hydock_motion.connect_leave(move |_| {
-                hydock_clone.hide();
-            });
+        let hydock_clone = hydock.clone();
+        let trigger_motion = EventControllerMotion::new();
+        trigger_motion.connect_enter(move |_, _, _| {
+            hydock_clone.show();
+        });
+
+        if load_config().auto_hide == true {
+            trigger.clone().show();
+
             hydock.add_controller(hydock_motion);
+            trigger.add_controller(trigger_motion);
         } else {
             hydock.clone().show();
             trigger.clone().hide();
+
+            hydock.remove_controller(&hydock_motion);
+            trigger.remove_controller(&trigger_motion);
         }
 
         load_style();
