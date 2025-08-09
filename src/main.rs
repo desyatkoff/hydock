@@ -58,13 +58,15 @@ struct Config {
 /// * `chaos_mode`: Enable random order of app icons
 /// * `ignore_applications`: List of application class names that should never appear in the dock
 /// * `pinned_applications`: List of application class names that should always appear in the dock
+/// * `show_app_launcher`: Add app launcher button on the right
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct ConfigSettings {
     app_launcher_command: String,
     auto_hide: bool,
     chaos_mode: bool,
     ignore_applications: Vec<String>,
-    pinned_applications: Vec<String>
+    pinned_applications: Vec<String>,
+    show_app_launcher: bool
 }
 
 /// Default config settings implementation
@@ -75,7 +77,8 @@ impl Default for ConfigSettings {
             auto_hide: false.into(),
             chaos_mode: false.into(),
             ignore_applications: Vec::new().into(),
-            pinned_applications: Vec::new().into()
+            pinned_applications: Vec::new().into(),
+            show_app_launcher: true.into()
         }
     }
 }
@@ -261,28 +264,30 @@ fn build_dock(app: &Application) {
             dock_clone.append(&apps_wrapper);
         }
 
-        let separator = Separator::new(gtk4::Orientation::Vertical);
-        separator.set_widget_name("separator");
-        dock_clone.append(&separator);
+        if load_config().show_app_launcher == true {
+            let separator = Separator::new(gtk4::Orientation::Vertical);
+            separator.set_widget_name("separator");
+            dock_clone.append(&separator);
 
-        let launcher_icon = gtk4::Image::from_icon_name("applications-all-symbolic");
-        launcher_icon.set_pixel_size(32);
+            let launcher_icon = gtk4::Image::from_icon_name("applications-all-symbolic");
+            launcher_icon.set_pixel_size(32);
 
-        let launcher_wrapper = GtkBox::new(gtk4::Orientation::Vertical, 0);
-        launcher_wrapper.set_widget_name("app-launcher");
-        launcher_wrapper.append(&launcher_icon);
+            let launcher_wrapper = GtkBox::new(gtk4::Orientation::Vertical, 0);
+            launcher_wrapper.set_widget_name("app-launcher");
+            launcher_wrapper.append(&launcher_icon);
 
-        let launcher_gesture = gtk4::GestureClick::builder().button(0).build();
-        launcher_gesture.connect_pressed(move |_, n_press, _, _| {
-            if n_press == 1 {
-                let _ = Command::new("sh")
-                    .arg("-c")
-                    .arg(load_config().app_launcher_command)
-                    .spawn();
-            }
-        });
-        launcher_wrapper.add_controller(launcher_gesture);
-        dock_clone.append(&launcher_wrapper);
+            let launcher_gesture = gtk4::GestureClick::builder().button(0).build();
+            launcher_gesture.connect_pressed(move |_, n_press, _, _| {
+                if n_press == 1 {
+                    let _ = Command::new("sh")
+                        .arg("-c")
+                        .arg(load_config().app_launcher_command)
+                        .spawn();
+                }
+            });
+            launcher_wrapper.add_controller(launcher_gesture);
+            dock_clone.append(&launcher_wrapper);
+        }
 
         return ControlFlow::Continue;
     });
