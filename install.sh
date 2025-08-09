@@ -73,5 +73,7 @@ if ! command -v make &>/dev/null; then
     fi
 fi
 
-make clean
-make install
+sudo make clean
+make build
+sudo make install
+make config
