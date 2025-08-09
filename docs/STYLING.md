@@ -37,4 +37,11 @@ hydock {
     background-color: #89b4fa;
     border-radius: 50%;
 }
+
+#separator {
+    background-color: #313244;
+    border: 1px solid #313244;
+    border-radius: 33%;
+    margin: 4px;
+}
 ```
