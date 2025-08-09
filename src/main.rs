@@ -27,7 +27,8 @@ use gtk4::{
     Box as GtkBox,
     CssProvider,
     EventControllerMotion,
-    prelude::*
+    prelude::*,
+    Separator
 };
 use gtk4_layer_shell::{
     Edge,
@@ -253,6 +254,10 @@ fn build_dock(app: &Application) {
             apps_wrapper.append(&app_dots_box);
             dock_clone.append(&apps_wrapper);
         }
+
+        let separator = Separator::new(gtk4::Orientation::Vertical);
+        separator.set_widget_name("separator");
+        dock_clone.append(&separator);
 
         let launcher_icon = gtk4::Image::from_icon_name("applications-all-symbolic");
         launcher_icon.set_pixel_size(32);
