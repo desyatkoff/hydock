@@ -22,16 +22,24 @@ use glib::{
     timeout_add_seconds_local
 };
 use gtk4::{
+    Align,
     Application,
     ApplicationWindow,
     Box as GtkBox,
     CssProvider,
     EventControllerMotion,
-    prelude::*,
-    Separator
+    GestureClick,
+    Image,
+    Orientation,
+    Separator,
+    STYLE_PROVIDER_PRIORITY_USER,
+    style_context_add_provider_for_display,
+    prelude::*
 };
+use gtk4::gdk::Display;
 use gtk4_layer_shell::{
     Edge,
+    Layer,
     LayerShell
 };
 use serde::{
@@ -39,11 +47,12 @@ use serde::{
     Serialize
 };
 use std::{
-    collections::HashMap,
-    fs,
-    process::Command,
-    rc::Rc
+    env,
+    fs
 };
+use std::collections::HashMap;
+use std::process::Command;
+use std::rc::Rc;
 
 /// Wrapper for the full Hydock configuration
 #[derive(Debug, Deserialize, Serialize)]
@@ -69,7 +78,7 @@ struct ConfigSettings {
     show_app_launcher: bool
 }
 
-/// Default config settings implementation
+/// Implements default config settings
 impl Default for ConfigSettings {
     fn default() -> Self {
         ConfigSettings {
@@ -98,7 +107,7 @@ fn main() {
     app.run();
 }
 
-/// Load dock once and refresh it every second
+/// Loads dock
 fn build_dock(app: &Application) {
     // Base Hydock GTK window
     let hydock = ApplicationWindow::builder()
@@ -111,10 +120,10 @@ fn build_dock(app: &Application) {
         .build();
     hydock.init_layer_shell();
     hydock.set_anchor(Edge::Bottom, true);
-    hydock.set_layer(gtk4_layer_shell::Layer::Top);
+    hydock.set_layer(Layer::Top);
     hydock.auto_exclusive_zone_enable();
 
-    // Trigger for showing dock again after it became hidden (when `auto_hide = true`)
+    // Trigger for showing dock again after it became hidden (when `auto_hide` is `true`)
     let trigger = ApplicationWindow::builder()
         .application(app)
         .decorated(false)
@@ -126,12 +135,12 @@ fn build_dock(app: &Application) {
         .build();
     trigger.init_layer_shell();
     trigger.set_anchor(Edge::Bottom, true);
-    trigger.set_layer(gtk4_layer_shell::Layer::Top);
+    trigger.set_layer(Layer::Top);
     trigger.show();
 
     // Dock panel itself
     let dock = Rc::new(GtkBox::new(
-        gtk4::Orientation::Horizontal,
+        Orientation::Horizontal,
         0
     ));
     let dock_clone = Rc::clone(&dock);
@@ -171,129 +180,144 @@ fn build_dock(app: &Application) {
             dock_clone.remove(&child);
         }
 
-        let mut counts: HashMap<String, usize> = HashMap::new();
-
-        // Add actually opened apps
-        for client in fetch_hyprland_clients() {
-            *counts.entry(client.class.to_lowercase()).or_insert(0) += 1;
-        }
-
-        // Ensure pinned apps appear in dock even if they have no open windows
-        for pinned in load_config().pinned_applications {
-            *counts.entry(pinned.to_lowercase()).or_insert(0) += 0;
-        }
-
-        // Remove unwanted apps
-        for ignored in load_config().ignore_applications {
-            counts.remove_entry(&ignored.to_lowercase());
-        }
-
-        // Collect app HashMaps into a Vector
-        let mut entries: Vec<_> = counts.into_iter().collect();
-
-        // Sort app icons in alphabetical order if chaos mode is disabled
-        if !load_config().chaos_mode {
-            entries.sort_by(|a, b| a.0.cmp(&b.0));
-        }
-
-        // Add app icons & dots
-        for (class, count) in entries {
-            let app_icon = gtk4::Image::from_icon_name(&class);
-            app_icon.set_pixel_size(32);
-
-            if app_icon.icon_name().is_none() {
-                app_icon.set_icon_name(Some("application-default-icon"));
-            }
-
-            let apps_wrapper = GtkBox::new(gtk4::Orientation::Vertical, 0);
-            apps_wrapper.set_widget_name("app-icon");
-            apps_wrapper.append(&app_icon);
-
-            // Try to focus the first window of the clicked app class using `hyprctl`
-            // If it fails (e.g., no such window), fallback to launching the app binary from `/usr/bin/` directory
-            let apps_gesture = gtk4::GestureClick::builder().button(0).build();
-            apps_gesture.connect_pressed(move |_, n_press, _, _| {
-                if n_press == 1 {
-                    let address_cmd_str = format!(
-                        "hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'",    // Get address of the first client with specified class
-                        class
-                    );
-                    let address_output = Command::new("sh")
-                        .arg("-c")
-                        .arg(address_cmd_str)
-                        .output()
-                        .expect(&format!(
-                            "Failed to execute `hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'`",
-                            class
-                        ));
-                    let address_str = String::from_utf8_lossy(&address_output.stdout).trim().to_string();
-
-                    let focus_cmd_str = format!("hyprctl dispatch focuswindow address:{}", address_str);
-                    let focus_output = Command::new("sh")
-                        .arg("-c")
-                        .arg(&focus_cmd_str)
-                        .output()
-                        .expect(&format!(
-                            "Failed to execute `hyprctl dispatch focuswindow address:{}`",
-                            address_str
-                        ));
-                    let focus_str = String::from_utf8_lossy(&focus_output.stdout).trim().to_string();
-
-                    if focus_str == "No such window found" {
-                        let _ = Command::new(format!("/usr/bin/{}", class))
-                            .spawn()
-                            .unwrap();
-                    }
-                }
-            });
-            apps_wrapper.add_controller(apps_gesture);
-
-            let app_dots_box = GtkBox::new(gtk4::Orientation::Horizontal, 4);
-            app_dots_box.set_widget_name("app-dots-box");
-            app_dots_box.set_halign(gtk4::Align::Center);
-
-            for _ in 0..count {
-                let app_dot = GtkBox::new(gtk4::Orientation::Vertical, 0);
-                app_dot.set_widget_name("app-dot");
-                app_dot.set_size_request(4, 4);
-
-                app_dots_box.append(&app_dot);
-            }
-
-            apps_wrapper.append(&app_dots_box);
-            dock_clone.append(&apps_wrapper);
-        }
+        build_apps(&dock_clone);
 
         if load_config().show_app_launcher == true {
-            let separator = Separator::new(gtk4::Orientation::Vertical);
-            separator.set_widget_name("separator");
-            dock_clone.append(&separator);
-
-            let launcher_icon = gtk4::Image::from_icon_name("applications-all-symbolic");
-            launcher_icon.set_pixel_size(32);
-
-            let launcher_wrapper = GtkBox::new(gtk4::Orientation::Vertical, 0);
-            launcher_wrapper.set_widget_name("app-launcher");
-            launcher_wrapper.append(&launcher_icon);
-
-            let launcher_gesture = gtk4::GestureClick::builder().button(0).build();
-            launcher_gesture.connect_pressed(move |_, n_press, _, _| {
-                if n_press == 1 {
-                    let _ = Command::new("sh")
-                        .arg("-c")
-                        .arg(load_config().app_launcher_command)
-                        .spawn();
-                }
-            });
-            launcher_wrapper.add_controller(launcher_gesture);
-            dock_clone.append(&launcher_wrapper);
+            build_app_launcher(&dock_clone);
         }
 
         return ControlFlow::Continue;
     });
 }
 
-/// Query Hyprland for currently open clients using `hyprctl`, deserialize JSON output
+/// Loads app icons & dots
+fn build_apps(dock: &Rc<GtkBox>) {
+    let mut counts: HashMap<String, usize> = HashMap::new();
+
+    // Add actually opened apps
+    for client in fetch_hyprland_clients() {
+        *counts.entry(client.class.to_lowercase()).or_insert(0) += 1;
+    }
+
+    // Ensure pinned apps appear in dock even if they have no open windows
+    for pinned in load_config().pinned_applications {
+        *counts.entry(pinned.to_lowercase()).or_insert(0) += 0;
+    }
+
+    // Remove unwanted apps
+    for ignored in load_config().ignore_applications {
+        counts.remove_entry(&ignored.to_lowercase());
+    }
+
+    // Collect apps into a Vector
+    let mut entries: Vec<(String, usize)> = counts.into_iter().collect();
+
+    // Sort app icons in alphabetical order if `chaos_mode` is `false`
+    if !load_config().chaos_mode {
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+    }
+
+    // Add app icons & dots
+    for (class, count) in entries {
+        // Icons lookup
+        let app_icon = Image::from_icon_name(&class);
+        app_icon.set_pixel_size(32);
+
+        if app_icon.icon_name().is_none() {
+            app_icon.set_icon_name(Some("application-default-icon"));
+        }
+
+        let apps_wrapper = GtkBox::new(Orientation::Vertical, 0);
+        apps_wrapper.set_widget_name("app-icon");
+        apps_wrapper.append(&app_icon);
+
+        // Try to focus the first window of the clicked app class using `hyprctl`
+        // If it fails (e.g., no such window), fallback to launching the app binary from `/usr/bin/` directory
+        let apps_gesture = GestureClick::builder().button(0).build();
+        apps_gesture.connect_pressed(move |_, n_press, _, _| {
+            if n_press == 1 {
+                let address_cmd_str = format!(
+                    "hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'",    // Get address of the first client with specified class
+                    class
+                );
+                let address_output = Command::new("sh")
+                    .arg("-c")
+                    .arg(address_cmd_str)
+                    .output()
+                    .expect(&format!(
+                        "Failed to execute `hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'`",
+                        class
+                    ));
+                let address_str = String::from_utf8_lossy(&address_output.stdout).trim().to_string();
+
+                let focus_cmd_str = format!("hyprctl dispatch focuswindow address:{}", address_str);
+                let focus_output = Command::new("sh")
+                    .arg("-c")
+                    .arg(&focus_cmd_str)
+                    .output()
+                    .expect(&format!(
+                        "Failed to execute `hyprctl dispatch focuswindow address:{}`",
+                        address_str
+                    ));
+                let focus_str = String::from_utf8_lossy(&focus_output.stdout).trim().to_string();
+
+                if focus_str == "No such window found" {
+                    let _ = Command::new(format!("/usr/bin/{}", class))
+                        .spawn()
+                        .unwrap();
+                }
+            }
+        });
+        apps_wrapper.add_controller(apps_gesture);
+
+        // Represent app's window count using dots
+        let app_dots_box = GtkBox::new(Orientation::Horizontal, 4);
+        app_dots_box.set_widget_name("app-dots-box");
+        app_dots_box.set_halign(Align::Center);
+
+        for _ in 0..count {
+            let app_dot = GtkBox::new(Orientation::Vertical, 0);
+            app_dot.set_widget_name("app-dot");
+            app_dot.set_size_request(4, 4);
+
+            app_dots_box.append(&app_dot);
+        }
+
+        apps_wrapper.append(&app_dots_box);
+        dock.append(&apps_wrapper);
+    }
+}
+
+/// Loads app launcher
+fn build_app_launcher(dock: &Rc<GtkBox>) {
+    // Separator between apps and app launcher
+    let separator = Separator::new(Orientation::Vertical);
+    separator.set_widget_name("separator");
+    dock.append(&separator);
+
+    // App launcher itself
+    let launcher_icon = Image::from_icon_name("applications-all-symbolic");
+    launcher_icon.set_pixel_size(32);
+
+    let launcher_wrapper = GtkBox::new(Orientation::Vertical, 0);
+    launcher_wrapper.set_widget_name("app-launcher");
+    launcher_wrapper.append(&launcher_icon);
+
+    // Open app launcher using command specified in config file
+    let launcher_gesture = GestureClick::builder().button(0).build();
+    launcher_gesture.connect_pressed(move |_, n_press, _, _| {
+        if n_press == 1 {
+            let _ = Command::new("sh")
+                .arg("-c")
+                .arg(load_config().app_launcher_command)
+                .spawn();
+        }
+    });
+    launcher_wrapper.add_controller(launcher_gesture);
+    dock.append(&launcher_wrapper);
+}
+
+/// Queries Hyprland for currently open clients using `hyprctl`, deserializes JSON output
 fn fetch_hyprland_clients() -> Vec<HyprlandClient> {
     let output = Command::new("hyprctl")
         .arg("clients")
@@ -304,11 +328,11 @@ fn fetch_hyprland_clients() -> Vec<HyprlandClient> {
     return serde_json::from_slice::<Vec<HyprlandClient>>(&output.stdout).unwrap_or_default();
 }
 
-/// Load configuration file from `~/.config/hydock/config.toml`, return default settings if fails
+/// Loads configuration from `~/.config/hydock/config.toml`, returns default settings if fails
 fn load_config() -> ConfigSettings {
     if let Ok(toml_data) = fs::read_to_string(format!(
         "{}/.config/hydock/config.toml",
-        std::env::var("HOME").unwrap()
+        env::var("HOME").unwrap()
     )) {
         match toml::from_str::<Config>(&toml_data) {
             Ok(config) => config.config,
@@ -319,19 +343,19 @@ fn load_config() -> ConfigSettings {
     }
 }
 
-/// Load stylesheet file from `~/.config/hydock/style.css`
+/// Loads stylesheet from `~/.config/hydock/style.css`
 fn load_style() {
     if let Ok(css_data) = fs::read_to_string(format!(
         "{}/.config/hydock/style.css",
-        std::env::var("HOME").unwrap()
+        env::var("HOME").unwrap()
     )) {
         let provider = CssProvider::new();
         provider.load_from_data(&css_data);
 
-        gtk4::style_context_add_provider_for_display(
-            &gtk4::gdk::Display::default().unwrap(),
+        style_context_add_provider_for_display(
+            &Display::default().unwrap(),
             &provider,
-            gtk4::STYLE_PROVIDER_PRIORITY_USER
+            STYLE_PROVIDER_PRIORITY_USER
         );
     }
 }
