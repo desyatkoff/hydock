@@ -68,6 +68,7 @@ struct Config {
 /// * `ignore_applications`: List of application class names that should never appear in the dock
 /// * `pinned_applications`: List of application class names that should always appear in the dock
 /// * `show_app_launcher`: Add app launcher button on the right
+/// * `show_separator`: Add separator between apps and app launcher
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct ConfigSettings {
     app_launcher_command: String,
@@ -75,7 +76,8 @@ struct ConfigSettings {
     chaos_mode: bool,
     ignore_applications: Vec<String>,
     pinned_applications: Vec<String>,
-    show_app_launcher: bool
+    show_app_launcher: bool,
+    show_separator: bool
 }
 
 /// Implements default config settings
@@ -87,7 +89,8 @@ impl Default for ConfigSettings {
             chaos_mode: false.into(),
             ignore_applications: Vec::new().into(),
             pinned_applications: Vec::new().into(),
-            show_app_launcher: true.into()
+            show_app_launcher: true.into(),
+            show_separator: true.into()
         }
     }
 }
@@ -291,9 +294,11 @@ fn build_apps(dock: &Rc<GtkBox>) {
 /// Loads app launcher
 fn build_app_launcher(dock: &Rc<GtkBox>) {
     // Separator between apps and app launcher
-    let separator = Separator::new(Orientation::Vertical);
-    separator.set_widget_name("separator");
-    dock.append(&separator);
+    if load_config().show_separator == true {
+        let separator = Separator::new(Orientation::Vertical);
+        separator.set_widget_name("separator");
+        dock.append(&separator);
+    }
 
     // App launcher itself
     let launcher_icon = Image::from_icon_name("applications-all-symbolic");
