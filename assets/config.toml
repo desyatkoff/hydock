@@ -5,3 +5,4 @@ chaos_mode = false
 ignore_applications = []
 pinned_applications = []
 show_app_launcher = true
+show_separator = true
