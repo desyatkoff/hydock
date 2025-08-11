@@ -9,7 +9,7 @@
        |___/                       
 ```
 
-<https://github.com/user-attachments/assets/de0d51aa-4f44-44c6-8d69-a972482ac78c>
+<p align="center"><img src="/assets/preview.png" /></p>
 
 ## Description
 
@@ -82,4 +82,4 @@ Refer to [CONTRIBUTING.md](/docs/CONTRIBUTING.md)
 
 Copyright (C) Sergey Desyatkov
 
-Hydock is licensed under the GNU General Public License v3.0 or later. See the [LICENSE](LICENSE) file for more details
+Hydock is licensed under the GNU General Public License v3.0 or later. See the [LICENSE](/LICENSE) file for more details
