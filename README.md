@@ -36,6 +36,7 @@ Hydock is a Rust + GTK dock that uses Hyprland IPC
     + Ignore applications
     + Pinned applications
     + Show app launcher
+    + Show separator
 * Style support (`~/.config/hydock/style.css`)
     + Global window style
     + Dock style
