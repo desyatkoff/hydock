@@ -34,4 +34,7 @@ pinned_applications = [
 
 # Add app launcher button on the right
 show_app_launcher = true
+
+# Add separator between apps and app launcher
+show_separator = true
 ```
