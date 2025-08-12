@@ -75,5 +75,9 @@ fi
 
 sudo make clean
 make build
+
+if [ ! -d "~/.config/hydock/" ]; then
+    make config
+fi
+
 sudo make install
-make config
