@@ -75,9 +75,8 @@ fi
 
 sudo make clean
 make build
+sudo make install
 
-if [ ! -d "~/.config/hydock/" ]; then
+if [[ ! -d "~/.config/hydock/" ]]; then
     make config
 fi
-
-sudo make install
