@@ -63,6 +63,7 @@ struct Config {
 /// Config settings loaded from `config.toml`
 ///
 /// * `app_launcher_command`: Shell command to execute when the app launcher is clicked
+/// * `app_launcher_icon`: Which icon to use for app launcher
 /// * `auto_hide`: Hide dock when unfocused
 /// * `chaos_mode`: Enable random order of app icons
 /// * `ignore_applications`: List of application class names that should never appear in the dock
@@ -72,6 +73,7 @@ struct Config {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct ConfigSettings {
     app_launcher_command: String,
+    app_launcher_icon: String,
     auto_hide: bool,
     chaos_mode: bool,
     ignore_applications: Vec<String>,
@@ -85,6 +87,7 @@ impl Default for ConfigSettings {
     fn default() -> Self {
         ConfigSettings {
             app_launcher_command: "rofi -show drun".into(),
+            app_launcher_icon: "applications-all-symbolic".into(),
             auto_hide: false.into(),
             chaos_mode: false.into(),
             ignore_applications: Vec::new().into(),
@@ -301,7 +304,7 @@ fn build_app_launcher(dock: &Rc<GtkBox>) {
     }
 
     // App launcher itself
-    let launcher_icon = Image::from_icon_name("applications-all-symbolic");
+    let launcher_icon = Image::from_icon_name(&load_config().app_launcher_icon);
     launcher_icon.set_pixel_size(32);
 
     let launcher_wrapper = GtkBox::new(Orientation::Vertical, 0);
