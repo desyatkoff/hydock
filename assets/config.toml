@@ -1,5 +1,6 @@
 [config]
 app_launcher_command = "rofi -show drun"
+app_launcher_icon = "applications-all-symbolic"
 auto_hide = false
 chaos_mode = false
 ignore_applications = []
