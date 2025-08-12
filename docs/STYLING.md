@@ -3,6 +3,7 @@
 Example `~/.config/hydock/style.css`:
 
 ```CSS
+/* Global window style */
 hydock {
     border-radius: 8px;
     color: #cdd6f4;
@@ -12,6 +13,7 @@ hydock {
     min-height: 58px;
 }
 
+/* Dock style */
 #dock {
     background-color: #1e1e2e;
     border-radius: 8px;
@@ -19,25 +21,42 @@ hydock {
     padding: 4px;
 }
 
-#app-icon, #app-launcher {
+/* Application icon style */
+#app-icon {
     border-radius: 8px;
     padding: 4px 8px;
     transition: background-color 0.25s ease;
 }
 
-#app-icon:hover, #app-launcher:hover {
+/* Application icon style on hover */
+#app-icon:hover {
     background-color: #313244;
 }
 
+/* Application launcher icon style */
+#app-launcher {
+    border-radius: 8px;
+    padding: 4px 8px;
+    transition: background-color 0.25s ease;
+}
+
+/* Application launcher icon style on hover */
+#app-launcher:hover {
+    background-color: #313244;
+}
+
+/* Application dots box style */
 #app-dots-box {
     margin-top: 2px;
 }
 
+/* Application dot style */
 #app-dot {
     background-color: #89b4fa;
     border-radius: 50%;
 }
 
+/* Separator style */
 #separator {
     background-color: #313244;
     border: 1px solid #313244;
