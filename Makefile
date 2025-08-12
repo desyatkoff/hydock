@@ -1,7 +1,7 @@
 BINDIR = /usr/bin
 TARGET = hydock
 
-all: clean build config install
+all: build install
 
 build:
 	cargo build --release --verbose
