@@ -240,8 +240,8 @@ fn build_apps(dock: &Rc<GtkBox>) {
         // Try to focus the first window of the clicked app class using `hyprctl`
         // If it fails (e.g., no such window), fallback to launching the app binary from `/usr/bin/` directory
         let apps_gesture = GestureClick::builder().button(0).build();
-        apps_gesture.connect_pressed(move |_, n_press, _, _| {
-            if n_press == 1 {
+        apps_gesture.connect_pressed(move |gesture, _, _, _| {
+            if gesture.current_button() == 1 {
                 let address_cmd_str = format!(
                     "hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'",    // Get address of the first client with specified class
                     class
@@ -268,6 +268,37 @@ fn build_apps(dock: &Rc<GtkBox>) {
                 let focus_str = String::from_utf8_lossy(&focus_output.stdout).trim().to_string();
 
                 if focus_str == "No such window found" {
+                    let _ = Command::new(format!("/usr/bin/{}", class))
+                        .spawn()
+                        .unwrap();
+                }
+            } else if gesture.current_button() == 2 {
+                let address_cmd_str = format!(
+                    "hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'",    // Get address of the first client with specified class
+                    class
+                );
+                let address_output = Command::new("sh")
+                    .arg("-c")
+                    .arg(address_cmd_str)
+                    .output()
+                    .expect(&format!(
+                        "Failed to execute `hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'`",
+                        class
+                    ));
+                let address_str = String::from_utf8_lossy(&address_output.stdout).trim().to_string();
+
+                let close_cmd_str = format!("hyprctl dispatch closewindow address:{}", address_str);
+                let close_output = Command::new("sh")
+                    .arg("-c")
+                    .arg(&close_cmd_str)
+                    .output()
+                    .expect(&format!(
+                        "Failed to execute `hyprctl dispatch closewindow address:{}`",
+                        address_str
+                    ));
+                let close_str = String::from_utf8_lossy(&close_output.stdout).trim().to_string();
+
+                if close_str == "No such window found" {
                     let _ = Command::new(format!("/usr/bin/{}", class))
                         .spawn()
                         .unwrap();
