@@ -23,6 +23,9 @@ ignore_applications = [
     "rofi"
 ]
 
+# Which icons to use for specified class names
+override_app_icons = { "thunar" = "system-file-manager" }
+
 # List of application class names that should always appear in the dock
 pinned_applications = [
     "discord",
