@@ -16,6 +16,9 @@ chaos_mode = false
 # List of application class names that should never appear in the dock
 ignore_applications = []
 
+# Which icons to use for specified class names
+override_app_icons = {}
+
 # List of application class names that should always appear in the dock
 pinned_applications = []
 
