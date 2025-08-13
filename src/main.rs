@@ -67,6 +67,7 @@ struct Config {
 /// * `auto_hide`: Hide dock when unfocused
 /// * `chaos_mode`: Enable random order of app icons
 /// * `ignore_applications`: List of application class names that should never appear in the dock
+/// * `override_app_icons`: Which icons to use for specified class names
 /// * `pinned_applications`: List of application class names that should always appear in the dock
 /// * `show_app_launcher`: Add app launcher button on the right
 /// * `show_separator`: Add separator between apps and app launcher
@@ -77,6 +78,7 @@ struct ConfigSettings {
     auto_hide: bool,
     chaos_mode: bool,
     ignore_applications: Vec<String>,
+    override_app_icons: HashMap<String, String>,
     pinned_applications: Vec<String>,
     show_app_launcher: bool,
     show_separator: bool
@@ -91,6 +93,7 @@ impl Default for ConfigSettings {
             auto_hide: false.into(),
             chaos_mode: false.into(),
             ignore_applications: Vec::new().into(),
+            override_app_icons: HashMap::new().into(),
             pinned_applications: Vec::new().into(),
             show_app_launcher: true.into(),
             show_separator: true.into()
@@ -228,6 +231,12 @@ fn build_apps(dock: &Rc<GtkBox>) {
         // Icons lookup
         let app_icon = Image::from_icon_name(&class);
         app_icon.set_pixel_size(32);
+
+        for override_icon in load_config().override_app_icons {
+            if class == override_icon.0 {
+                app_icon.set_icon_name(Some(&override_icon.1));
+            }
+        }
 
         if app_icon.icon_name().is_none() {
             app_icon.set_icon_name(Some("application-default-icon"));
