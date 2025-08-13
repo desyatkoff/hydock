@@ -35,6 +35,7 @@ Hydock is a Rust + GTK dock that uses Hyprland IPC
     + Hide dock when unfocused
     + Enable random order of app icons
     + List of application class names that should never appear in the dock
+    + Which icons to use for specified class names
     + List of application class names that should always appear in the dock
     + Add app launcher button on the right
     + Add separator between apps and app launcher
