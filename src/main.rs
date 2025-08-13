@@ -237,7 +237,10 @@ fn build_apps(dock: &Rc<GtkBox>) {
         apps_wrapper.set_widget_name("app-icon");
         apps_wrapper.append(&app_icon);
 
-        // Try to focus the first window of the clicked app class using `hyprctl`
+        // Try to *focus* the first window of the clicked app class
+        // OR
+        // Try to *close* the first window of the middle-clicked app
+        //
         // If it fails (e.g., no such window), fallback to launching the app binary from `/usr/bin/` directory
         let apps_gesture = GestureClick::builder().button(0).build();
         apps_gesture.connect_pressed(move |gesture, _, _, _| {
