@@ -18,6 +18,9 @@ auto_hide = true
 # You don't actually want this, idk why did I add this
 chaos_mode = false
 
+# Anchor of the dock panel
+dock_position = "bottom"
+
 # List of application class names that should never appear in the dock
 ignore_applications = [
     "rofi"
