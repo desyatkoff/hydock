@@ -9,8 +9,9 @@ hydock {
     color: #cdd6f4;
     font-family: "Noto Sans";
     font-size: 16px;
-    margin-bottom: 8px;
+    margin: 8px;
     min-height: 58px;
+    min-width: 58px;
 }
 
 /* Dock style */
@@ -25,6 +26,7 @@ hydock {
 #app-icon {
     border-radius: 8px;
     padding: 4px 8px;
+    min-height: 40px;
     transition: background-color 0.25s ease;
 }
 
@@ -37,6 +39,7 @@ hydock {
 #app-launcher {
     border-radius: 8px;
     padding: 4px 8px;
+    min-height: 40px;
     transition: background-color 0.25s ease;
 }
 
@@ -47,7 +50,7 @@ hydock {
 
 /* Application dots box style */
 #app-dots-box {
-    margin-top: 2px;
+    margin: 1px;
 }
 
 /* Application dot style */
