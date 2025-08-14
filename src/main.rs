@@ -66,6 +66,7 @@ struct Config {
 /// * `app_launcher_icon`: Which icon to use for app launcher
 /// * `auto_hide`: Hide dock when unfocused
 /// * `chaos_mode`: Enable random order of app icons
+/// * `dock_position`: Anchor of the dock panel
 /// * `ignore_applications`: List of application class names that should never appear in the dock
 /// * `override_app_icons`: Which icons to use for specified class names
 /// * `pinned_applications`: List of application class names that should always appear in the dock
@@ -77,6 +78,7 @@ struct ConfigSettings {
     app_launcher_icon: String,
     auto_hide: bool,
     chaos_mode: bool,
+    dock_position: String,
     ignore_applications: Vec<String>,
     override_app_icons: HashMap<String, String>,
     pinned_applications: Vec<String>,
@@ -92,6 +94,7 @@ impl Default for ConfigSettings {
             app_launcher_icon: "applications-all-symbolic".into(),
             auto_hide: false.into(),
             chaos_mode: false.into(),
+            dock_position: "bottom".into(),
             ignore_applications: Vec::new().into(),
             override_app_icons: HashMap::new().into(),
             pinned_applications: Vec::new().into(),
@@ -128,7 +131,7 @@ fn build_dock(app: &Application) {
         .can_focus(false)
         .build();
     hydock.init_layer_shell();
-    hydock.set_anchor(Edge::Bottom, true);
+    hydock.set_anchor(parse_dock_position().0, true);
     hydock.set_layer(Layer::Top);
     hydock.auto_exclusive_zone_enable();
 
@@ -139,17 +142,24 @@ fn build_dock(app: &Application) {
         .resizable(false)
         .title("Hydock Trigger")
         .can_focus(false)
-        .default_width(2147483647)
-        .default_height(1)
         .build();
     trigger.init_layer_shell();
-    trigger.set_anchor(Edge::Bottom, true);
+    trigger.set_anchor(parse_dock_position().0, true);
     trigger.set_layer(Layer::Top);
+
+    if parse_dock_position().1 == Orientation::Horizontal {
+        trigger.set_default_width(2147483647);
+        trigger.set_default_height(1);
+    } else {
+        trigger.set_default_width(1);
+        trigger.set_default_height(2147483647);
+    }
+
     trigger.show();
 
     // Dock panel itself
     let dock = Rc::new(GtkBox::new(
-        Orientation::Horizontal,
+        parse_dock_position().1,
         0
     ));
     let dock_clone = Rc::clone(&dock);
@@ -242,7 +252,7 @@ fn build_apps(dock: &Rc<GtkBox>) {
             app_icon.set_icon_name(Some("application-default-icon"));
         }
 
-        let apps_wrapper = GtkBox::new(Orientation::Vertical, 0);
+        let apps_wrapper = GtkBox::new(parse_dock_position().2, 0);
         apps_wrapper.set_widget_name("app-icon");
         apps_wrapper.append(&app_icon);
 
@@ -320,12 +330,13 @@ fn build_apps(dock: &Rc<GtkBox>) {
         apps_wrapper.add_controller(apps_gesture);
 
         // Represent app's window count using dots
-        let app_dots_box = GtkBox::new(Orientation::Horizontal, 4);
+        let app_dots_box = GtkBox::new(parse_dock_position().1, 4);
         app_dots_box.set_widget_name("app-dots-box");
         app_dots_box.set_halign(Align::Center);
+        app_dots_box.set_valign(Align::Center);
 
         for _ in 0..count {
-            let app_dot = GtkBox::new(Orientation::Vertical, 0);
+            let app_dot = GtkBox::new(parse_dock_position().2, 0);
             app_dot.set_widget_name("app-dot");
             app_dot.set_size_request(4, 4);
 
@@ -341,7 +352,7 @@ fn build_apps(dock: &Rc<GtkBox>) {
 fn build_app_launcher(dock: &Rc<GtkBox>) {
     // Separator between apps and app launcher
     if load_config().show_separator == true {
-        let separator = Separator::new(Orientation::Vertical);
+        let separator = Separator::new(parse_dock_position().2);
         separator.set_widget_name("separator");
         dock.append(&separator);
     }
@@ -350,7 +361,7 @@ fn build_app_launcher(dock: &Rc<GtkBox>) {
     let launcher_icon = Image::from_icon_name(&load_config().app_launcher_icon);
     launcher_icon.set_pixel_size(32);
 
-    let launcher_wrapper = GtkBox::new(Orientation::Vertical, 0);
+    let launcher_wrapper = GtkBox::new(parse_dock_position().2, 0);
     launcher_wrapper.set_widget_name("app-launcher");
     launcher_wrapper.append(&launcher_icon);
 
@@ -379,7 +390,29 @@ fn fetch_hyprland_clients() -> Vec<HyprlandClient> {
     return serde_json::from_slice::<Vec<HyprlandClient>>(&output.stdout).unwrap_or_default();
 }
 
-/// Loads configuration from `~/.config/hydock/config.toml`, returns default settings if fails
+/// Converts `dock_position` setting from configuration file into layout values
+///
+/// Falls back to default if the value is incorrect
+/// 
+/// # Returns
+///
+/// A tuple containing:
+/// * `Edge`: Anchor for the dock and dock trigger
+/// * `Orientation`: Orientation for the dock and dock trigger
+/// * `Orientation`: Orientation for app dots, separator
+fn parse_dock_position() -> (Edge, Orientation, Orientation) {
+    match &load_config().dock_position.to_lowercase()[..] {
+        "left" => (Edge::Left, Orientation::Vertical, Orientation::Horizontal),
+        "right" => (Edge::Right, Orientation::Vertical, Orientation::Horizontal),
+        "top" => (Edge::Top, Orientation::Horizontal, Orientation::Vertical),
+        "bottom" => (Edge::Bottom, Orientation::Horizontal, Orientation::Vertical),
+        _ => (Edge::Bottom, Orientation::Horizontal, Orientation::Vertical)    // Fallback
+    }
+}
+
+/// Loads configuration from `~/.config/hydock/config.toml`
+///
+/// Falls back to default settings if fails
 fn load_config() -> ConfigSettings {
     if let Ok(toml_data) = fs::read_to_string(format!(
         "{}/.config/hydock/config.toml",
