@@ -133,6 +133,7 @@ fn build_dock(app: &Application) {
     hydock.init_layer_shell();
     hydock.set_anchor(parse_dock_position().0, true);
     hydock.set_layer(Layer::Top);
+    hydock.set_namespace(Some("hydock"));
     hydock.auto_exclusive_zone_enable();
 
     // Trigger for showing dock again after it became hidden (when `auto_hide` is `true`)
