@@ -18,10 +18,11 @@
  */
 
 use glib::{
-    ControlFlow,
-    timeout_add_seconds_local
+    timeout_add_seconds_local,
+    ControlFlow
 };
 use gtk4::{
+    prelude::*,
     Align,
     Application,
     ApplicationWindow,
@@ -33,8 +34,7 @@ use gtk4::{
     Orientation,
     Separator,
     STYLE_PROVIDER_PRIORITY_USER,
-    style_context_add_provider_for_display,
-    prelude::*
+    style_context_add_provider_for_display
 };
 use gtk4::gdk::Display;
 use gtk4_layer_shell::{
@@ -47,12 +47,50 @@ use serde::{
     Serialize
 };
 use std::{
+    collections::HashMap,
     env,
-    fs
+    fs,
+    io,
+    process::{
+        Command,
+        Output
+    },
+    rc::Rc,
+    thread
 };
-use std::collections::HashMap;
-use std::process::Command;
-use std::rc::Rc;
+
+/// Small two-variant enum to avoid excessive `bool`s in a struct, while staying TOML-compatible (serializes/deserializes as `bool`)
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Toggle {
+    Off,
+    On
+}
+
+impl Default for Toggle {
+    fn default() -> Self {
+        Toggle::Off
+    }
+}
+
+impl<'de> Deserialize<'de> for Toggle {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>
+    {
+        let b = bool::deserialize(deserializer)?;
+
+        Ok(if b { Toggle::On } else { Toggle::Off })
+    }
+}
+
+impl Serialize for Toggle {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer
+    {
+        serializer.serialize_bool(matches!(self, Toggle::On))
+    }
+}
 
 /// Wrapper for the full Hydock configuration
 #[derive(Debug, Deserialize, Serialize)]
@@ -76,30 +114,30 @@ struct Config {
 struct ConfigSettings {
     app_launcher_command: String,
     app_launcher_icon: String,
-    auto_hide: bool,
-    chaos_mode: bool,
+    auto_hide: Toggle,
+    chaos_mode: Toggle,
     dock_position: String,
     ignore_applications: Vec<String>,
     override_app_icons: HashMap<String, String>,
     pinned_applications: Vec<String>,
-    show_app_launcher: bool,
-    show_separator: bool
+    show_app_launcher: Toggle,
+    show_separator: Toggle
 }
 
 /// Implements default config settings
 impl Default for ConfigSettings {
     fn default() -> Self {
-        ConfigSettings {
+        Self {
             app_launcher_command: "rofi -show drun".into(),
             app_launcher_icon: "applications-all-symbolic".into(),
-            auto_hide: false.into(),
-            chaos_mode: false.into(),
+            auto_hide: Toggle::Off,
+            chaos_mode: Toggle::Off,
             dock_position: "bottom".into(),
-            ignore_applications: Vec::new().into(),
-            override_app_icons: HashMap::new().into(),
-            pinned_applications: Vec::new().into(),
-            show_app_launcher: true.into(),
-            show_separator: true.into()
+            ignore_applications: Vec::new(),
+            override_app_icons: HashMap::new(),
+            pinned_applications: Vec::new(),
+            show_app_launcher: Toggle::On,
+            show_separator: Toggle::On
         }
     }
 }
@@ -131,7 +169,11 @@ fn build_dock(app: &Application) {
         .can_focus(false)
         .build();
     hydock.init_layer_shell();
-    hydock.set_anchor(parse_dock_position().0, true);
+
+    let cfg_for_init = load_config();
+    let (edge, dock_orientation, dots_orientation) = parse_dock_position(&cfg_for_init);
+
+    hydock.set_anchor(edge, true);
     hydock.set_layer(Layer::Top);
     hydock.set_namespace(Some("hydock"));
     hydock.auto_exclusive_zone_enable();
@@ -145,10 +187,10 @@ fn build_dock(app: &Application) {
         .can_focus(false)
         .build();
     trigger.init_layer_shell();
-    trigger.set_anchor(parse_dock_position().0, true);
+    trigger.set_anchor(edge, true);
     trigger.set_layer(Layer::Top);
 
-    if parse_dock_position().1 == Orientation::Horizontal {
+    if dock_orientation == Orientation::Horizontal {
         trigger.set_default_width(2147483647);
         trigger.set_default_height(1);
     } else {
@@ -159,29 +201,34 @@ fn build_dock(app: &Application) {
     trigger.show();
 
     // Dock panel itself
-    let dock = Rc::new(GtkBox::new(
-        parse_dock_position().1,
-        0
-    ));
+    let dock = Rc::new(GtkBox::new(dock_orientation, 0));
     let dock_clone = Rc::clone(&dock);
     dock.set_widget_name("dock");
     hydock.set_child(Some(&*dock));
 
     // Main loop for refreshing dock
     timeout_add_seconds_local(1, move || {
-        let hydock_clone = hydock.clone();
+        // Load config once per tick
+        let cfg = load_config();
+        let (edge, dock_orientation, dots_orientation) = parse_dock_position(&cfg);
+
+        // Refresh layer anchors in case position changed
+        hydock.set_anchor(edge, true);
+        trigger.set_anchor(edge, true);
+
+        let hydock_for_leave = hydock.clone();
         let hydock_motion = EventControllerMotion::new();
         hydock_motion.connect_leave(move |_| {
-            hydock_clone.hide();
+            hydock_for_leave.hide();
         });
 
-        let hydock_clone = hydock.clone();
+        let hydock_for_show = hydock.clone();
         let trigger_motion = EventControllerMotion::new();
         trigger_motion.connect_enter(move |_, _, _| {
-            hydock_clone.show();
+            hydock_for_show.show();
         });
 
-        if load_config().auto_hide == true {
+        if cfg.auto_hide == Toggle::On {
             trigger.clone().show();
 
             hydock.add_controller(hydock_motion);
@@ -196,22 +243,41 @@ fn build_dock(app: &Application) {
 
         load_style();
 
+        // Clear and rebuild dock children
         while let Some(child) = dock_clone.first_child() {
             dock_clone.remove(&child);
         }
 
-        build_apps(&dock_clone);
+        build_apps(&dock_clone, &cfg, dock_orientation, dots_orientation);
 
-        if load_config().show_app_launcher == true {
-            build_app_launcher(&dock_clone);
+        if cfg.show_app_launcher == Toggle::On {
+            build_app_launcher(&dock_clone, &cfg, dots_orientation);
         }
 
-        return ControlFlow::Continue;
+        ControlFlow::Continue
     });
 }
 
 /// Loads app icons & dots
-fn build_apps(dock: &Rc<GtkBox>) {
+fn build_apps(dock: &Rc<GtkBox>, cfg: &ConfigSettings, dock_orientation: Orientation, dots_orientation: Orientation) {
+    let mut counts = collect_app_counts(cfg);
+
+    // Collect apps into a Vector
+    let mut entries: Vec<(String, usize)> = counts.drain().collect();
+
+    // Sort app icons in alphabetical order if `chaos_mode` is `Off`
+    if cfg.chaos_mode == Toggle::Off {
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+    }
+
+    // Add app icons & dots
+    for (class, count) in entries {
+        let app_widget = build_app_widget(&class, count, cfg, dock_orientation, dots_orientation);
+        dock.append(&app_widget);
+    }
+}
+
+fn collect_app_counts(cfg: &ConfigSettings) -> HashMap<String, usize> {
     let mut counts: HashMap<String, usize> = HashMap::new();
 
     // Add actually opened apps
@@ -220,160 +286,176 @@ fn build_apps(dock: &Rc<GtkBox>) {
     }
 
     // Ensure pinned apps appear in dock even if they have no open windows
-    for pinned in load_config().pinned_applications {
-        *counts.entry(pinned.to_lowercase()).or_insert(0) += 0;
+    for pinned in &cfg.pinned_applications {
+        counts.entry(pinned.to_lowercase()).or_insert(0);
     }
 
     // Remove unwanted apps
-    for ignored in load_config().ignore_applications {
-        counts.remove_entry(&ignored.to_lowercase());
+    for ignored in &cfg.ignore_applications {
+        counts.remove(&ignored.to_lowercase());
     }
 
-    // Collect apps into a Vector
-    let mut entries: Vec<(String, usize)> = counts.into_iter().collect();
+    counts
+}
 
-    // Sort app icons in alphabetical order if `chaos_mode` is `false`
-    if !load_config().chaos_mode {
-        entries.sort_by(|a, b| a.0.cmp(&b.0));
+fn build_app_widget(
+    class: &str,
+    count: usize,
+    cfg: &ConfigSettings,
+    dock_orientation: Orientation,
+    dots_orientation: Orientation,
+) -> GtkBox {
+    // Icons lookup
+    let app_icon = Image::from_icon_name(class);
+    app_icon.set_pixel_size(32);
+
+    if let Some(override_icon) = cfg.override_app_icons.get(class) {
+        app_icon.set_icon_name(Some(override_icon));
     }
 
-    // Add app icons & dots
-    for (class, count) in entries {
-        // Icons lookup
-        let app_icon = Image::from_icon_name(&class);
-        app_icon.set_pixel_size(32);
+    if app_icon.icon_name().is_none() {
+        app_icon.set_icon_name(Some("application-default-icon"));
+    }
 
-        for override_icon in load_config().override_app_icons {
-            if class == override_icon.0 {
-                app_icon.set_icon_name(Some(&override_icon.1));
-            }
-        }
+    let apps_wrapper = GtkBox::new(dots_orientation, 0);
+    apps_wrapper.set_widget_name("app-icon");
+    apps_wrapper.append(&app_icon);
 
-        if app_icon.icon_name().is_none() {
-            app_icon.set_icon_name(Some("application-default-icon"));
-        }
-
-        let apps_wrapper = GtkBox::new(parse_dock_position().2, 0);
-        apps_wrapper.set_widget_name("app-icon");
-        apps_wrapper.append(&app_icon);
-
-        // Try to *focus* the first window of the clicked app class
-        // OR
-        // Try to *close* the first window of the middle-clicked app
-        //
-        // If it fails (e.g., no such window), fallback to launching the app binary from `/usr/bin/` directory
-        let apps_gesture = GestureClick::builder().button(0).build();
-        apps_gesture.connect_pressed(move |gesture, _, _, _| {
-            if gesture.current_button() == 1 {
-                let address_cmd_str = format!(
-                    "hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'",    // Get address of the first client with specified class
-                    class
-                );
-                let address_output = Command::new("sh")
-                    .arg("-c")
-                    .arg(address_cmd_str)
-                    .output()
-                    .expect(&format!(
-                        "Failed to execute `hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'`",
-                        class
-                    ));
-                let address_str = String::from_utf8_lossy(&address_output.stdout).trim().to_string();
-
-                let focus_cmd_str = format!("hyprctl dispatch focuswindow address:{}", address_str);
-                let focus_output = Command::new("sh")
-                    .arg("-c")
-                    .arg(&focus_cmd_str)
-                    .output()
-                    .expect(&format!(
-                        "Failed to execute `hyprctl dispatch focuswindow address:{}`",
-                        address_str
-                    ));
-                let focus_str = String::from_utf8_lossy(&focus_output.stdout).trim().to_string();
-
-                if focus_str == "No such window found" {
-                    let _ = Command::new(format!("/usr/bin/{}", class))
-                        .spawn()
-                        .unwrap();
+    // Click & middle-click
+    let class_owned = class.to_owned();
+    let apps_gesture = GestureClick::builder().button(0).build();
+    apps_gesture.connect_pressed(move |gesture, _, _, _| {
+        match gesture.current_button() {
+            1 => {
+                // Focus or launch
+                if let Err(e) = focus_or_launch(&class_owned) {
+                    eprintln!("`focus_or_launch` error for {class_owned}: {e}");
                 }
-            } else if gesture.current_button() == 2 {
-                let address_cmd_str = format!(
-                    "hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'",    // Get address of the first client with specified class
-                    class
-                );
-                let address_output = Command::new("sh")
-                    .arg("-c")
-                    .arg(address_cmd_str)
-                    .output()
-                    .expect(&format!(
-                        "Failed to execute `hyprctl clients -j | jq -r '[.[] | select(.class == \"{}\")][0].address'`",
-                        class
-                    ));
-                let address_str = String::from_utf8_lossy(&address_output.stdout).trim().to_string();
-
-                let close_cmd_str = format!("hyprctl dispatch closewindow address:{}", address_str);
-                let close_output = Command::new("sh")
-                    .arg("-c")
-                    .arg(&close_cmd_str)
-                    .output()
-                    .expect(&format!(
-                        "Failed to execute `hyprctl dispatch closewindow address:{}`",
-                        address_str
-                    ));
-                let close_str = String::from_utf8_lossy(&close_output.stdout).trim().to_string();
-
-                if close_str == "No such window found" {
-                    let _ = Command::new(format!("/usr/bin/{}", class))
-                        .spawn()
-                        .unwrap();
+            },
+            2 => {
+                // Close or launch
+                if let Err(e) = close_or_launch(&class_owned) {
+                    eprintln!("`close_or_launch` error for {class_owned}: {e}");
                 }
-            }
-        });
-        apps_wrapper.add_controller(apps_gesture);
-
-        // Represent app's window count using dots
-        let app_dots_box = GtkBox::new(parse_dock_position().1, 4);
-        app_dots_box.set_widget_name("app-dots-box");
-        app_dots_box.set_halign(Align::Center);
-        app_dots_box.set_valign(Align::Center);
-
-        for _ in 0..count {
-            let app_dot = GtkBox::new(parse_dock_position().2, 0);
-            app_dot.set_widget_name("app-dot");
-            app_dot.set_size_request(4, 4);
-
-            app_dots_box.append(&app_dot);
+            },
+            _ => {}
         }
+    });
+    apps_wrapper.add_controller(apps_gesture);
 
-        apps_wrapper.append(&app_dots_box);
-        dock.append(&apps_wrapper);
+    // Represent app's window count using dots
+    let app_dots_box = GtkBox::new(dock_orientation, 4);
+    app_dots_box.set_widget_name("app-dots-box");
+    app_dots_box.set_halign(Align::Center);
+    app_dots_box.set_valign(Align::Center);
+
+    for _ in 0..count {
+        let app_dot = GtkBox::new(dots_orientation, 0);
+        app_dot.set_widget_name("app-dot");
+        app_dot.set_size_request(4, 4);
+        app_dots_box.append(&app_dot);
     }
+
+    apps_wrapper.append(&app_dots_box);
+
+    apps_wrapper
+}
+
+/// Focuses the first window of specified app class
+///
+/// Launches this app if failed to focus
+fn focus_or_launch(class: &str) -> io::Result<()> {
+    let address = first_client_address_for_class(class)?;
+
+    if !address.is_empty() {
+        let cmd = format!("hyprctl dispatch focuswindow address:{address}");
+        let out = run_sh(&cmd)?;
+
+        if String::from_utf8_lossy(&out.stdout).trim() == "No such window found" {
+            launch_background(&format!("/usr/bin/{class}"))?;
+        }
+    } else {
+        launch_background(&format!("/usr/bin/{class}"))?;
+    }
+
+    Ok(())
+}
+
+/// Closes the first window of specified app class
+///
+/// Launches this app if failed to close
+fn close_or_launch(class: &str) -> io::Result<()> {
+    let address = first_client_address_for_class(class)?;
+
+    if !address.is_empty() {
+        let cmd = format!("hyprctl dispatch closewindow address:{address}");
+        let out = run_sh(&cmd)?;
+
+        if String::from_utf8_lossy(&out.stdout).trim() == "No such window found" {
+            launch_background(&format!("/usr/bin/{class}"))?;
+        }
+    } else {
+        launch_background(&format!("/usr/bin/{class}"))?;
+    }
+
+    Ok(())
+}
+
+/// Launches a command and waits in a detached background thread to avoid zombies
+fn launch_background(cmd_path: &str) -> io::Result<()> {
+    let mut child = Command::new(cmd_path).spawn()?;
+
+    thread::spawn(move || {
+        let _ = child.wait();
+    });
+
+    Ok(())
+}
+
+/// Gets address of the first client with specified class
+fn first_client_address_for_class(class: &str) -> io::Result<String> {
+    let cmd = format!("hyprctl clients -j | jq -r '[.[] | select(.class == \"{class}\")][0].address'");
+    let out = run_sh(&cmd)?;
+
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Launches command using `sh` shell
+fn run_sh(cmd: &str) -> io::Result<Output> {
+    Command::new("sh").arg("-c").arg(cmd).output()
 }
 
 /// Loads app launcher
-fn build_app_launcher(dock: &Rc<GtkBox>) {
+fn build_app_launcher(dock: &Rc<GtkBox>, cfg: &ConfigSettings, dots_orientation: Orientation) {
     // Separator between apps and app launcher
-    if load_config().show_separator == true {
-        let separator = Separator::new(parse_dock_position().2);
+    if cfg.show_separator == Toggle::On {
+        let separator = Separator::new(dots_orientation);
         separator.set_widget_name("separator");
         dock.append(&separator);
     }
 
     // App launcher itself
-    let launcher_icon = Image::from_icon_name(&load_config().app_launcher_icon);
+    let launcher_icon = Image::from_icon_name(&cfg.app_launcher_icon);
     launcher_icon.set_pixel_size(32);
 
-    let launcher_wrapper = GtkBox::new(parse_dock_position().2, 0);
+    let launcher_wrapper = GtkBox::new(dots_orientation, 0);
     launcher_wrapper.set_widget_name("app-launcher");
     launcher_wrapper.append(&launcher_icon);
 
     // Open app launcher using command specified in config file
+    let cmd = cfg.app_launcher_command.clone();
     let launcher_gesture = GestureClick::builder().button(0).build();
     launcher_gesture.connect_pressed(move |_, n_press, _, _| {
         if n_press == 1 {
-            let _ = Command::new("sh")
-                .arg("-c")
-                .arg(load_config().app_launcher_command)
-                .spawn();
+            if let Err(e) = Command::new("sh").arg("-c").arg(&cmd).spawn().and_then(|mut c| {
+                thread::spawn(move || {
+                    let _ = c.wait();
+                });
+
+                Ok(())
+            }) {
+                eprintln!("Failed to spawn app launcher: {e}");
+            }
         }
     });
     launcher_wrapper.add_controller(launcher_gesture);
@@ -382,32 +464,34 @@ fn build_app_launcher(dock: &Rc<GtkBox>) {
 
 /// Queries Hyprland for currently open clients using `hyprctl`, deserializes JSON output
 fn fetch_hyprland_clients() -> Vec<HyprlandClient> {
-    let output = Command::new("hyprctl")
-        .arg("clients")
-        .arg("-j")
-        .output()
-        .expect("Failed to execute `hyprctl clients -j`");
+    match Command::new("hyprctl").arg("clients").arg("-j").output() {
+        Ok(output) => {
+            serde_json::from_slice::<Vec<HyprlandClient>>(&output.stdout).unwrap_or_default()
+        },
+        Err(err) => {
+            eprintln!("Failed to execute `hyprctl clients -j`: {err}");
 
-    return serde_json::from_slice::<Vec<HyprlandClient>>(&output.stdout).unwrap_or_default();
+            Vec::new()
+        }
+    }
 }
 
 /// Converts `dock_position` setting from configuration file into layout values
 ///
 /// Falls back to default if the value is incorrect
-/// 
+///
 /// # Returns
 ///
 /// A tuple containing:
 /// * `Edge`: Anchor for the dock and dock trigger
 /// * `Orientation`: Orientation for the dock and dock trigger
 /// * `Orientation`: Orientation for app dots, separator
-fn parse_dock_position() -> (Edge, Orientation, Orientation) {
-    match &load_config().dock_position.to_lowercase()[..] {
+fn parse_dock_position(cfg: &ConfigSettings) -> (Edge, Orientation, Orientation) {
+    match cfg.dock_position.to_lowercase().as_str() {
         "left" => (Edge::Left, Orientation::Vertical, Orientation::Horizontal),
         "right" => (Edge::Right, Orientation::Vertical, Orientation::Horizontal),
         "top" => (Edge::Top, Orientation::Horizontal, Orientation::Vertical),
-        "bottom" => (Edge::Bottom, Orientation::Horizontal, Orientation::Vertical),
-        _ => (Edge::Bottom, Orientation::Horizontal, Orientation::Vertical)    // Fallback
+        _ => (Edge::Bottom, Orientation::Horizontal, Orientation::Vertical)    // "bottom" and any invalid value fallback here
     }
 }
 
@@ -415,32 +499,45 @@ fn parse_dock_position() -> (Edge, Orientation, Orientation) {
 ///
 /// Falls back to default settings if fails
 fn load_config() -> ConfigSettings {
-    if let Ok(toml_data) = fs::read_to_string(format!(
-        "{}/.config/hydock/config.toml",
-        env::var("HOME").unwrap()
-    )) {
+    let home = env::var("HOME").ok();
+    let Some(home) = home else {
+        eprintln!("$HOME is not set; using default configuration");
+
+        return ConfigSettings::default();
+    };
+    let path = format!("{home}/.config/hydock/config.toml");
+
+    if let Ok(toml_data) = fs::read_to_string(path) {
         match toml::from_str::<Config>(&toml_data) {
             Ok(config) => config.config,
-            Err(_) => ConfigSettings::default()
+            Err(err) => {
+                eprintln!("Failed to parse config; using defaults: {err}");
+
+                ConfigSettings::default()
+            }
         }
     } else {
-        return ConfigSettings::default();
+        ConfigSettings::default()
     }
 }
 
 /// Loads stylesheet from `~/.config/hydock/style.css`
 fn load_style() {
-    if let Ok(css_data) = fs::read_to_string(format!(
-        "{}/.config/hydock/style.css",
-        env::var("HOME").unwrap()
-    )) {
+    let Some(home) = env::var("HOME").ok() else {
+        eprintln!("$HOME is not set; skipping style load");
+
+        return;
+    };
+    let path = format!("{home}/.config/hydock/style.css");
+
+    if let Ok(css_data) = fs::read_to_string(path) {
         let provider = CssProvider::new();
         provider.load_from_data(&css_data);
 
-        style_context_add_provider_for_display(
-            &Display::default().unwrap(),
-            &provider,
-            STYLE_PROVIDER_PRIORITY_USER
-        );
+        if let Some(display) = Display::default() {
+            style_context_add_provider_for_display(&display, &provider, STYLE_PROVIDER_PRIORITY_USER);
+        } else {
+            eprintln!("No GDK display; skipping style application");
+        }
     }
 }
