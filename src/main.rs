@@ -277,6 +277,7 @@ fn build_apps(dock: &Rc<GtkBox>, cfg: &ConfigSettings, dock_orientation: Orienta
     }
 }
 
+/// Gets all application window count into a HashMap containing class name and window count
 fn collect_app_counts(cfg: &ConfigSettings) -> HashMap<String, usize> {
     let mut counts: HashMap<String, usize> = HashMap::new();
 
@@ -298,6 +299,7 @@ fn collect_app_counts(cfg: &ConfigSettings) -> HashMap<String, usize> {
     counts
 }
 
+/// Renders application icon widget for dock
 fn build_app_widget(
     class: &str,
     count: usize,
