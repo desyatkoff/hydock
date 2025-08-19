@@ -1,6 +1,6 @@
 [package]
 name = "hydock"
-version = "1.6.0-dev"
+version = "1.6.0"
 authors = ["Sergey Desyatkov <sergeidesyatkov@gmail.com>"]
 edition = "2024"
 description = "Hydock is a Rust + GTK dock that uses Hyprland IPC"
